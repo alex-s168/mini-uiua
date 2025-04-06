@@ -154,7 +154,6 @@ mod complex;
 mod constant;
 mod cowslice;
 mod error;
-mod ffi;
 mod fill;
 pub mod format;
 mod function;
@@ -167,9 +166,6 @@ mod primitive;
 pub mod profile;
 mod run;
 mod shape;
-#[cfg(feature = "stand")]
-#[doc(hidden)]
-pub mod stand;
 mod sys;
 mod tree;
 mod types;
@@ -180,7 +176,6 @@ pub mod window;
 
 #[allow(unused_imports)]
 pub use self::{
-    algorithm::encode,
     array::*,
     assembly::*,
     boxed::*,
@@ -188,7 +183,6 @@ pub use self::{
     complex::*,
     constant::*,
     error::*,
-    ffi::*,
     function::*,
     lex::is_ident_char,
     lex::*,
@@ -372,9 +366,6 @@ mod tests {
         });
         if crate::compile::invert::DEBUG {
             panic!("compile::invert::DEBUG is true");
-        }
-        if crate::ffi::DEBUG {
-            panic!("ffi::DEBUG is true");
         }
         if crate::compile::optimize::DEBUG {
             panic!("compile::optimize::DEBUG is true");

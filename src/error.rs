@@ -1,7 +1,5 @@
 use std::{convert::Infallible, error::Error, fmt, io, mem::take, path::PathBuf, sync::Arc};
 
-use colored::*;
-
 use crate::{
     function::FunctionId,
     lex::{Sp, Span},
@@ -596,60 +594,6 @@ impl Report {
             color: true,
         }
     }
-    /// A report that tests have finished
-    pub fn tests(successes: usize, failures: usize, not_run: usize) -> Self {
-        let mut fragments = if successes == 0 && not_run == 0 {
-            if failures == 0 {
-                vec![]
-            } else {
-                vec![ReportFragment::Colored(
-                    match failures {
-                        1 => "Test failed".into(),
-                        2 => "Both tests failed".into(),
-                        _ => format!("All {failures} tests failed"),
-                    },
-                    ReportKind::Error,
-                )]
-            }
-        } else {
-            let mut fragments = vec![ReportFragment::Colored(
-                match (successes, failures) {
-                    (1, 0) if not_run == 0 => "Test passed".into(),
-                    (2, 0) if not_run == 0 => "Both tests passed".into(),
-                    (suc, 0) if not_run == 0 => format!("All {suc} tests passed"),
-                    (suc, _) => {
-                        format!("{suc} test{} passed", if suc == 1 { "" } else { "s" })
-                    }
-                },
-                DiagnosticKind::Info.into(),
-            )];
-            if failures > 0 {
-                fragments.extend([
-                    ReportFragment::Plain(", ".into()),
-                    ReportFragment::Colored(format!("{failures} failed"), ReportKind::Error),
-                ])
-            }
-            fragments
-        };
-        if not_run > 0 {
-            if fragments.is_empty() {
-                fragments.push(ReportFragment::Colored(
-                    format!("0 of {not_run} tests ran"),
-                    ReportKind::Error,
-                ));
-            } else {
-                fragments.push(ReportFragment::Plain(", ".into()));
-                fragments.push(ReportFragment::Colored(
-                    format!("{not_run} didn't run"),
-                    DiagnosticKind::Warning.into(),
-                ));
-            }
-        }
-        Report {
-            fragments,
-            color: true,
-        }
-    }
 }
 
 impl fmt::Display for Report {
@@ -660,22 +604,7 @@ impl fmt::Display for Report {
                 | ReportFragment::Faint(s)
                 | ReportFragment::Fainter(s) => write!(f, "{s}")?,
                 ReportFragment::Colored(s, kind) => {
-                    if self.color {
-                        let s = s.color(match kind {
-                            ReportKind::Error => Color::Red,
-                            ReportKind::Diagnostic(DiagnosticKind::Warning) => Color::Yellow,
-                            ReportKind::Diagnostic(DiagnosticKind::Style) => Color::Green,
-                            ReportKind::Diagnostic(DiagnosticKind::Advice) => Color::TrueColor {
-                                r: 50,
-                                g: 150,
-                                b: 255,
-                            },
-                            ReportKind::Diagnostic(DiagnosticKind::Info) => Color::BrightCyan,
-                        });
-                        write!(f, "{s}")?
-                    } else {
-                        write!(f, "{s}")?
-                    }
+                    write!(f, "{s}")?
                 }
                 ReportFragment::Newline => writeln!(f)?,
             }

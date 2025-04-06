@@ -17,7 +17,6 @@ use std::{
 
 use ecow::{eco_vec, EcoVec};
 use enum_iterator::{all, Sequence};
-use rayon::prelude::*;
 use time::{Date, Month, OffsetDateTime, Time};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -912,7 +911,7 @@ impl<T: ArrayValue> Array<T> {
                 if subs > 500 {
                     // This is pretty unsafe, but no indices should collide, so it's fine? 🤷
                     let ptr: usize = data.as_mut_ptr() as usize;
-                    (0..s - 1).into_par_iter().for_each(|i| {
+                    (0..s - 1).into_iter().for_each(|i| {
                         let ptr: *mut T = ptr as *mut _;
                         for j in i + 1..s {
                             unsafe {
@@ -938,11 +937,7 @@ impl<T: ArrayValue> Array<T> {
             };
             // Perform the operation on each subarray
             let mut temp = data.to_vec();
-            if subs > 500 {
-                temp.par_chunks_mut(subs).enumerate().for_each(op);
-            } else {
-                temp.chunks_mut(subs).enumerate().for_each(op);
-            }
+            temp.chunks_mut(subs).enumerate().for_each(op);
             data.clone_from_slice(&temp);
         }
         if forward {
@@ -1032,7 +1027,7 @@ impl<T: ArrayValue> Array<T> {
         let mut indices = (0..self.row_count())
             .map(|i| i as f64)
             .collect::<EcoVec<_>>();
-        indices.make_mut().par_sort_by(|&a, &b| {
+        indices.make_mut().sort_by(|&a, &b| {
             self.row_slice(a as usize)
                 .iter()
                 .zip(self.row_slice(b as usize))
@@ -1050,7 +1045,7 @@ impl<T: ArrayValue> Array<T> {
             return Vec::new();
         }
         let mut indices: Vec<usize> = (0..self.row_count()).collect();
-        indices.par_sort_by(|&a, &b| {
+        indices.sort_by(|&a, &b| {
             self.row_slice(a)
                 .iter()
                 .zip(self.row_slice(b))
@@ -1071,7 +1066,7 @@ impl<T: ArrayValue> Array<T> {
         let mut indices = (0..self.row_count())
             .map(|i| i as f64)
             .collect::<EcoVec<_>>();
-        indices.make_mut().par_sort_by(|&a, &b| {
+        indices.make_mut().sort_by(|&a, &b| {
             self.row_slice(a as usize)
                 .iter()
                 .zip(self.row_slice(b as usize))
@@ -1089,7 +1084,7 @@ impl<T: ArrayValue> Array<T> {
             return Vec::new();
         }
         let mut indices: Vec<usize> = (0..self.row_count()).collect();
-        indices.par_sort_by(|&a, &b| {
+        indices.sort_by(|&a, &b| {
             self.row_slice(a)
                 .iter()
                 .zip(self.row_slice(b))
@@ -1132,10 +1127,10 @@ impl<T: ArrayValue> Array<T> {
         let mut indices = Vec::with_capacity(chunk_len / subrow_len);
         for chunk in self.data.as_mut_slice().chunks_exact_mut(chunk_len) {
             if is_list {
-                chunk.par_sort_by(T::array_cmp);
+                chunk.sort_by(T::array_cmp);
             } else {
                 indices.extend(0..chunk.len() / subrow_len);
-                indices.par_sort_by(|&a, &b| {
+                indices.sort_by(|&a, &b| {
                     chunk[a * subrow_len..(a + 1) * subrow_len]
                         .iter()
                         .zip(&chunk[b * subrow_len..(b + 1) * subrow_len])
@@ -1176,10 +1171,10 @@ impl<T: ArrayValue> Array<T> {
         let mut indices = Vec::with_capacity(chunk_len / subrow_len);
         for chunk in self.data.as_mut_slice().chunks_exact_mut(chunk_len) {
             if is_list {
-                chunk.par_sort_by(|a, b| b.array_cmp(a));
+                chunk.sort_by(|a, b| b.array_cmp(a));
             } else {
                 indices.extend(0..chunk.len() / subrow_len);
-                indices.par_sort_by(|&a, &b| {
+                indices.sort_by(|&a, &b| {
                     chunk[a * subrow_len..(a + 1) * subrow_len]
                         .iter()
                         .zip(&chunk[b * subrow_len..(b + 1) * subrow_len])
@@ -1973,314 +1968,6 @@ impl Array<f64> {
         let mut shape = self.shape.clone();
         shape.insert(0, longest);
         Ok(Array::new(shape, data))
-    }
-}
-
-impl Value {
-    pub(crate) fn to_json_string(&self, env: &Uiua) -> UiuaResult<String> {
-        let json = self.to_json_value(env)?;
-        serde_json::to_string(&json).map_err(|e| env.error(e))
-    }
-    pub(crate) fn to_json_value(&self, env: &Uiua) -> UiuaResult<serde_json::Value> {
-        Ok(match self {
-            Value::Num(n) if n.rank() == 0 => {
-                let n = n.data[0];
-                if n.fract() == 0.0 && n.abs() < i64::MAX as f64 {
-                    serde_json::Value::Number((n as i64).into())
-                } else {
-                    serde_json::Number::from_f64(n)
-                        .map(Into::into)
-                        .unwrap_or(serde_json::Value::Null)
-                }
-            }
-            Value::Byte(bytes) if bytes.rank() == 0 => {
-                let b = bytes.data[0];
-                if bytes.meta().flags.contains(ArrayFlags::BOOLEAN_LITERAL) {
-                    serde_json::Value::Bool(b != 0)
-                } else {
-                    serde_json::Value::Number(b.into())
-                }
-            }
-            Value::Complex(_) => return Err(env.error("Cannot convert complex numbers to JSON")),
-            Value::Char(c) if c.rank() == 0 => serde_json::Value::String(c.data[0].to_string()),
-            Value::Char(c) if c.rank() == 1 => serde_json::Value::String(c.data.iter().collect()),
-            Value::Box(b) if b.rank() == 0 => b.data[0].0.to_json_value(env)?,
-            value => {
-                if value.is_map() {
-                    let mut map = serde_json::Map::with_capacity(value.row_count());
-                    for (k, v) in value.map_kv() {
-                        let k = k.as_string(env, "JSON map keys must be strings")?;
-                        let v = v.to_json_value(env)?;
-                        map.insert(k, v);
-                    }
-                    serde_json::Value::Object(map)
-                } else {
-                    serde_json::Value::Array(
-                        value
-                            .rows()
-                            .map(|row| row.to_json_value(env))
-                            .collect::<Result<_, _>>()?,
-                    )
-                }
-            }
-        })
-    }
-    pub(crate) fn from_json_string(json: &str, env: &Uiua) -> UiuaResult<Self> {
-        #[cfg(not(feature = "json5"))]
-        let json_value: serde_json::Value = serde_json::from_str(json).map_err(|e| env.error(e))?;
-        #[cfg(feature = "json5")]
-        let json_value: serde_json::Value = json5::from_str(json).map_err(|e| env.error(e))?;
-        Self::from_json_value(json_value, env)
-    }
-    pub(crate) fn from_json_value(json_value: serde_json::Value, _env: &Uiua) -> UiuaResult<Self> {
-        Ok(match json_value {
-            serde_json::Value::Null => f64::NAN.into(),
-            serde_json::Value::Bool(b) => b.into(),
-            serde_json::Value::Number(n) => {
-                if let Some(n) = n.as_f64() {
-                    if n >= 0.0 && n.fract() == 0.0 && n < u8::MAX as f64 {
-                        (n as u8).into()
-                    } else {
-                        n.into()
-                    }
-                } else {
-                    0.0.into()
-                }
-            }
-            serde_json::Value::String(s) => s.into(),
-            serde_json::Value::Array(arr) => {
-                let mut rows = Vec::with_capacity(arr.len());
-                for value in arr {
-                    let mut value = Value::from_json_value(value, _env)?;
-                    if value.map_keys().is_some() {
-                        value = Boxed(value).into();
-                    }
-                    rows.push(value);
-                }
-                if rows.iter().all(|val| val.shape().is_empty())
-                    && rows
-                        .windows(2)
-                        .all(|win| win[0].type_id() == win[1].type_id())
-                {
-                    Value::from_row_values_infallible(rows)
-                } else {
-                    Array::from(
-                        rows.into_iter()
-                            .map(Value::boxed_if_not)
-                            .collect::<EcoVec<_>>(),
-                    )
-                    .into()
-                }
-            }
-            serde_json::Value::Object(map) => {
-                let mut keys = EcoVec::with_capacity(map.len());
-                let mut values = Vec::with_capacity(map.len());
-                for (k, v) in map {
-                    keys.push(Boxed(k.into()));
-                    let mut value = Value::from_json_value(v, _env)?;
-                    if value.map_keys().is_some() {
-                        value = Boxed(value).into();
-                    }
-                    values.push(value);
-                }
-                let mut values = if values.windows(2).all(|win| {
-                    win[0].shape() == win[1].shape() && win[0].type_name() == win[1].type_name()
-                }) {
-                    Value::from_row_values_infallible(values)
-                } else {
-                    Array::from(values.into_iter().map(Boxed).collect::<EcoVec<_>>()).into()
-                };
-                values.map(keys.into(), _env)?;
-                values
-            }
-        })
-    }
-}
-
-impl Value {
-    pub(crate) fn to_csv(&self, env: &Uiua) -> UiuaResult<String> {
-        #[cfg(not(feature = "csv"))]
-        return Err(env.error("CSV support is not enabled in this environment"));
-        #[cfg(feature = "csv")]
-        {
-            let delimiter = u8::try_from(env.scalar_fill::<char>().unwrap_or(','))
-                .map_err(|_| env.error("CSV delimiter must be ASCII"))?;
-
-            let mut buf = Vec::new();
-            let mut writer = csv::WriterBuilder::new()
-                .flexible(true)
-                .delimiter(delimiter)
-                .from_writer(&mut buf);
-
-            match self.rank() {
-                0 => writer
-                    .write_record([self.format()])
-                    .map_err(|e| env.error(e))?,
-                1 => {
-                    for row in self.rows() {
-                        writer
-                            .write_record(row.unboxed().rows().map(|v| v.format()))
-                            .map_err(|e| env.error(e))?;
-                    }
-                }
-                2 => {
-                    for row in self.rows() {
-                        writer
-                            .write_record(row.rows().map(|v| v.format()))
-                            .map_err(|e| env.error(e))?;
-                    }
-                }
-                n => return Err(env.error(format!("Cannot write a rank-{n} array to CSV"))),
-            }
-            writer.flush().map_err(|e| env.error(e))?;
-            drop(writer);
-            let s = String::from_utf8(buf).map_err(|e| env.error(e))?;
-            Ok(s)
-        }
-    }
-    pub(crate) fn to_xlsx(&self, env: &Uiua) -> UiuaResult<Vec<u8>> {
-        #[cfg(not(feature = "simple_excel_writer"))]
-        return Err(env.error("XLSX encoding is not enabled in this environment"));
-        #[cfg(feature = "simple_excel_writer")]
-        {
-            use simple_excel_writer::*;
-            if self.rank() > 3 {
-                return Err(env.error(format!(
-                    "Cannot write a rank-{} array to an XLSX workbook",
-                    self.rank()
-                )));
-            }
-            let sheet_arrays = if self.is_map() {
-                let mut sheet_arrays = Vec::new();
-                for (k, v) in self.map_kv() {
-                    let name = k.as_string(env, "Sheet name must be a string")?;
-                    if v.rank() > 2 {
-                        return Err(env.error(format!(
-                            "Cannot write a rank-{} array to an XLSX sheet",
-                            v.rank()
-                        )));
-                    }
-                    sheet_arrays.push((name, v));
-                }
-                sheet_arrays
-            } else if self.rank() == 3 {
-                self.rows()
-                    .enumerate()
-                    .map(|(i, row)| (format!("Sheet {}", i + 1), row))
-                    .collect()
-            } else {
-                vec![("Sheet1".into(), self.clone())]
-            };
-            let mut workbook = Workbook::create_in_memory();
-            for (sheet_name, value) in sheet_arrays {
-                let mut sheet = workbook.create_sheet(&sheet_name);
-                workbook
-                    .write_sheet(&mut sheet, |writer| {
-                        for row in value.unboxed().into_rows() {
-                            let mut sheet_row = Row::new();
-                            for cell in row.unboxed().into_rows() {
-                                match cell {
-                                    Value::Num(n) => sheet_row.add_cell(n.data[0]),
-                                    Value::Byte(b) => sheet_row.add_cell(b.data[0] as f64),
-                                    Value::Char(c) => sheet_row.add_cell(c.data[0].to_string()),
-                                    Value::Complex(c) => sheet_row.add_cell(c.data[0].to_string()),
-                                    Value::Box(b) => {
-                                        let Boxed(b) = &b.data[0];
-                                        if b.row_count() == 0 {
-                                            sheet_row.add_empty_cells(1);
-                                        } else {
-                                            sheet_row.add_cell(b.format())
-                                        }
-                                    }
-                                }
-                            }
-                            writer.append_row(sheet_row)?;
-                        }
-                        Ok(())
-                    })
-                    .map_err(|e| env.error(e))?;
-            }
-            workbook
-                .close()
-                .map(Option::unwrap)
-                .map_err(|e| env.error(e))
-        }
-    }
-    pub(crate) fn from_csv(csv_str: &str, env: &mut Uiua) -> UiuaResult<Self> {
-        #[cfg(not(feature = "csv"))]
-        return Err(env.error("CSV support is not enabled in this environment"));
-        #[cfg(feature = "csv")]
-        {
-            let delimiter = u8::try_from(env.scalar_unfill::<char>().unwrap_or(','))
-                .map_err(|_| env.error("CSV delimiter must be ASCII"))?;
-
-            let mut reader = csv::ReaderBuilder::new()
-                .has_headers(false)
-                .flexible(true)
-                .delimiter(delimiter)
-                .from_reader(csv_str.as_bytes());
-
-            let fill = env.value_fill().cloned().unwrap_or_else(|| "".into());
-            env.with_fill(fill, |env| {
-                let mut rows = Vec::new();
-                for result in reader.records() {
-                    let record = result.map_err(|e| env.error(e))?;
-                    let mut row = EcoVec::new();
-                    for field in record.iter() {
-                        row.push(Boxed(field.into()));
-                    }
-                    rows.push(Array::new(row.len(), row));
-                }
-                Array::from_row_arrays(rows, env).map(Into::into)
-            })
-        }
-    }
-    pub(crate) fn from_xlsx(_xlsx: &[u8], env: &mut Uiua) -> UiuaResult<Self> {
-        #[cfg(not(feature = "calamine"))]
-        return Err(env.error("XLSX decoding is not enabled in this environment"));
-        #[cfg(feature = "calamine")]
-        {
-            use calamine::*;
-
-            let mut workbook: Xlsx<_> =
-                open_workbook_from_rs(std::io::Cursor::new(_xlsx)).map_err(|e| env.error(e))?;
-            let sheet_names = workbook.sheet_names();
-            let fill = env.value_fill().cloned().unwrap_or_else(|| "".into());
-            let mut sheet_values = EcoVec::new();
-            env.with_fill(fill, |env| {
-                for sheet_name in &sheet_names {
-                    let sheet = workbook
-                        .worksheet_range(sheet_name)
-                        .map_err(|e| env.error(e))?;
-                    let mut rows = Vec::new();
-                    for row in sheet.rows() {
-                        let mut cells = EcoVec::new();
-                        for cell in row {
-                            cells.push(Boxed(match cell {
-                                &Data::Int(i) => i.into(),
-                                &Data::Float(f) => f.into(),
-                                Data::String(s) => s.clone().into(),
-                                &Data::Bool(b) => b.into(),
-                                Data::DateTime(dt) => {
-                                    ((dt.as_f64() - 2.0) * 24.0 * 60.0 * 60.0 - 2208988800.0).into()
-                                }
-                                Data::DateTimeIso(dt) => dt.clone().into(),
-                                Data::DurationIso(dur) => dur.clone().into(),
-                                Data::Error(e) => e.to_string().into(),
-                                Data::Empty => String::new().into(),
-                            }));
-                        }
-                        rows.push(Array::from(cells));
-                    }
-                    sheet_values.push(Boxed(Array::from_row_arrays(rows, env)?.into()));
-                }
-                Ok(())
-            })?;
-            let keys: Value = sheet_names.into_iter().map(|s| Boxed(s.into())).collect();
-            let mut values: Value = Array::from(sheet_values).into();
-            values.map(keys, env)?;
-            Ok(values)
-        }
     }
 }
 

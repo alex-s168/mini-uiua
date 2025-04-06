@@ -10,8 +10,6 @@ use std::{
     slice,
 };
 
-use serde::*;
-
 use crate::{
     algorithm::validate_size_of, Array, ArrayLen, ImplPrimitive, Node, Primitive, SigNode,
     Signature, SysOp, Value,
@@ -133,13 +131,13 @@ impl Stack {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SigCheckError {
     pub message: String,
     pub kind: SigCheckErrorKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SigCheckErrorKind {
     Incorrect,
     LoopOverreach,
@@ -570,10 +568,6 @@ impl VirtualEnv {
                 Sys(SysOp::ReadLines) => {
                     let [f] = get_args(args)?;
                     self.handle_sig(f);
-                }
-                Sys(SysOp::AudioStream) => {
-                    let [f] = get_args(args)?;
-                    self.handle_args_outputs(f.args.saturating_sub(1), f.outputs.saturating_sub(1));
                 }
                 prim if prim.modifier_args().is_some() => {
                     if let Some(sig) = prim.sig() {

@@ -13,161 +13,31 @@ version = "0.15.0-dev.2"
 
 [dependencies]
 # Core dependencies
-bitflags = {version = "2", features = ["serde"]}
+bitflags = {version = "2"}
 bytemuck = {version = "1.17", features = ["must_cast", "derive", "extern_crate_alloc"]}
-colored = "2"
-crossbeam-channel = "0.5.12"
-dashmap = {version = "5", features = ["serde"]}
-ecow = {version = "0.2.3", features = ["serde"]}
+ctor = "0.3.6"
+ecow = {version = "0.2.3"}
 enum-iterator = "2.0.0"
-indexmap = {version = "2", features = ["serde"]}
-num_cpus = "1.16.0"
-once_cell = "1"
-parking_lot = "0.12.1"
+indexmap = {version = "2"}
+once_cell = "1.20.3"
 paste = "1.0.14"
 pathdiff = "0.2.1"
-rand = {version = "0.8.5", features = ["small_rng"]}
-rayon = "1.9.0"
-regex = "1.10.3"
-serde = {version = "1", features = ["derive", "rc"]}
-serde_json = "1"
-serde_tuple = "0.5.0"
-thread_local = "1"
 time = {version = "0.3.36", features = ["local-offset"]}
-tinyvec = {version = "1", features = ["alloc", "serde"]}
+tinyvec = {version = "1", features = ["alloc"]}
 unicode-segmentation = "1.10"
-
-# Native dependencies
-httparse = {version = "1.8.0", optional = true}
-open = {version = "5", optional = true}
-rawrrr = {version = "0.2.1", optional = true}
-rustls = {version = "0.23.2", optional = true, default-features = false, features = [
-  "std",
-  "tls12",
-  "ring",
-]}
-terminal_size = {version = "0.3.0", optional = true}
-trash = {version = "4.0.0", optional = true}
-viuer = {version = "0.9", optional = true}
-webpki-roots = {version = "0.26.0", optional = true}
-
-# Native audio dependencies
-hodaun = {version = "0.4.1", optional = true, features = ["output", "wav"]}
-lockfree = {version = "0.5.1", optional = true}
-
-# Binary dependencies
-clap = {version = "4", optional = true, features = ["derive"]}
-color-backtrace = {version = "0.6.1", optional = true}
-ctrlc = {version = "=3.4.4", optional = true}
-icy_sixel = {version = "0.1.2", optional = true}
-notify = {version = "6", optional = true}
-rustyline = {version = "14.0.0", optional = true}
-terminal-light = {version = "1.4.0", optional = true}
-tokio = {version = "1", optional = true, features = ["io-std", "rt"]}
-tower-lsp = {version = "0.20.0", optional = true, features = ["proposed"]}
-
-# Profiling dependencies
-serde_yaml = {version = "0.9.33", optional = true}
-
-# Feature dependencies
-arboard = {version = "3", optional = true}
-calamine = {version = "0.26.1", optional = true}
-color_quant = {version = "1.1", optional = true}
-cosmic-text = {version = "0.12.1", optional = true}
-csv = {version = "1", optional = true}
-gif = {version = "0.13.1", optional = true}
-hound = {version = "3", optional = true}
-image = {version = "0.25", optional = true, default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "qoi", "webp"]}
-json5 = {version = "0.4.1", optional = true}
-libffi = {version = "3", optional = true}
-libloading = {version = "0.8.3", optional = true}
-# NOTE: Including as a dependency to activate the bytemuck feature flag
-nokhwa = {version = "0.10.7", optional = true, features = ["input-native"]}
-num-complex = {version = ">=0.4.1", optional = true, default-features = false, features = ["bytemuck"]}
-rustfft = {version = "6.2.0", optional = true}
-rustls-pemfile = {version = "2.1.2", optional = true}
-simple_excel_writer = {version = "0.2.0", optional = true}
-skrifa = {version = "0.20.0", optional = true}
-sys-locale = {version = "0.3.1", optional = true}
-
-# Web-only dependencies
-js-sys = {version = "0.3", optional = true}
-wasm-bindgen = {version = "0.2.92", optional = true}
-web-sys = {version = "0.3.60", optional = true}
-
-# Window dependencies
-eframe = {version = "0.29.1", optional = true, features = ["persistence"]}
-native-dialog = {version = "0.7.0", optional = true}
-rmp-serde = {version = "1.3.0", optional = true}
+wasm-bindgen = "0.2.100"
 
 [features]
-audio = ["hodaun", "lockfree", "audio_encode"]
-audio_encode = ["hound"]
-batteries = [
-  "gif",
-  "image",
-  "audio_encode",
-  "csv",
-  "xlsx",
-  "json5",
-  "fft",
-  "font_shaping",
-]
-binary = [
-  "ctrlc",
-  "notify",
-  "clap",
-  "color-backtrace",
-  "rustyline",
-  "native_sys",
-  "ffi",
-  "terminal-light",
-  "terminal_size",
-]
-bytes = [] # No longer used
-clipboard = ["arboard"]
-debug = []
-default = [
-  # "window", # Comment in for dev
-  "binary",
-  "terminal_image",
-  "lsp",
-  "stand",
-  "tls",
-  "invoke",
-  "trash",
-  "native_sys",
-  "raw_mode",
-  "clipboard",
-  "opt",
-  "batteries",
-]
-ffi = ["libffi", "libloading"]
-fft = ["rustfft", "num-complex"]
-font_shaping = ["cosmic-text", "sys-locale", "skrifa"]
-full = ["audio", "webcam", "window"] # Enables all optional features
-gif = ["dep:gif", "image", "color_quant"]
-invoke = ["open"]
-lsp = ["tower-lsp", "tokio", "native_sys"]
-native_sys = []
-opt = [] # Enables some optimizations but increases binary size
-profile = ["serde_yaml"]
-raw_mode = ["rawrrr", "native_sys"]
-stand = ["native_sys"]
-terminal_image = ["viuer", "image", "icy_sixel"]
-tls = ["httparse", "rustls", "webpki-roots", "rustls-pemfile"]
-web = ["wasm-bindgen", "js-sys", "web-sys"]
-webcam = ["image", "nokhwa"]
-window = ["eframe", "rmp-serde", "image", "native-dialog"]
-xlsx = ["calamine", "simple_excel_writer"]
-# Use system static libraries instead of building them
-system = ["libffi?/system"]
 
-[[bin]]
-name = "uiua"
+[lib]
+crate-type = ["cdylib"]
 
 [workspace]
-members = ["site", "tests_ffi", "pad/editor"]
+#members = ["site", "tests_ffi", "pad/editor"]
+
+[profile.release]
+lto = true
+opt-level = "z"
 
 [profile.dev]
 incremental = true

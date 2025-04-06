@@ -22,7 +22,6 @@ use std::{
 
 use ecow::{eco_vec, EcoString, EcoVec};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     ast::*,
@@ -37,7 +36,7 @@ use crate::{
     DiagnosticKind, DocComment, DocCommentSig, Function, FunctionId, GitTarget, Ident,
     ImplPrimitive, InputSrc, IntoInputSrc, IntoSysBackend, Node, PrimClass, Primitive, Purity,
     RunMode, SemanticComment, SigNode, Signature, SysBackend, Uiua, UiuaError, UiuaErrorKind,
-    UiuaResult, Value, CONSTANTS, EXAMPLE_UA, SUBSCRIPT_DIGITS, VERSION,
+    UiuaResult, Value, CONSTANTS, SUBSCRIPT_DIGITS, VERSION,
 };
 pub use pre_eval::PreEvalMode;
 
@@ -129,7 +128,7 @@ struct BindingPrelude {
 type LocalNames = IndexMap<Ident, LocalName>;
 
 /// A Uiua module
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct Module {
     /// The top level comment
     pub comment: Option<EcoString>,
@@ -250,7 +249,7 @@ impl Default for Scope {
 }
 
 /// The index of a named local in the bindings, and whether it is public
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LocalName {
     /// The index of the binding in assembly's bindings
     pub index: usize,
@@ -856,11 +855,7 @@ code:
                 .backend()
                 .file_read_all(&path)
                 .or_else(|e| {
-                    if path.ends_with(Path::new("example.ua")) {
-                        Ok(EXAMPLE_UA.as_bytes().to_vec())
-                    } else {
-                        Err(e)
-                    }
+                    Err(e)
                 })
                 .map_err(|e| self.error(span.clone(), e))?;
             if let Some(mut comp) = (bytes.len() > 1000)

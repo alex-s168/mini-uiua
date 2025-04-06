@@ -11,7 +11,6 @@ use std::{
 };
 
 use ecow::eco_vec;
-use serde::*;
 
 use crate::{
     assembly::{Assembly, Function},
@@ -21,6 +20,7 @@ use crate::{
     ImplPrimitive::{self, *},
     Node::{self, *},
     Primitive::{self, *},
+    abort_txt,
     Purity, SigNode, Signature, SysOp, Uiua, UiuaResult,
 };
 
@@ -175,7 +175,7 @@ struct MaybeVal<P>(P);
 #[derive(Debug)]
 struct RequireVal<P>(P);
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum InversionError {
     #[default]
     Generic,
@@ -282,7 +282,6 @@ impl From<()> for InversionError {
 impl Error for InversionError {}
 
 use ecow::{EcoString, EcoVec};
-use regex::Regex;
 use InversionError::Generic;
 
 use super::algebra::AlgebraError;
@@ -303,39 +302,7 @@ pub(crate) fn match_format_pattern(parts: EcoVec<EcoString>, env: &mut Uiua) -> 
             }
         }
         _ => {
-            thread_local! {
-                static CACHE: RefCell<HashMap<EcoVec<EcoString>, Regex>> = RefCell::new(HashMap::new());
-            }
-            CACHE.with(|cache| {
-                let mut cache = cache.borrow_mut();
-                let re = cache.entry(parts.clone()).or_insert_with(|| {
-                    let mut re = String::new();
-                    re.push_str("(?s)^");
-                    for (i, part) in parts.iter().enumerate() {
-                        if i > 0 {
-                            re.push_str("(.+?|.*)");
-                        }
-                        re.push_str(&regex::escape(part));
-                    }
-                    re.push('$');
-                    Regex::new(&re).unwrap()
-                });
-                if !re.is_match(val.as_ref()) {
-                    return Err(
-                        if let Some(part) = parts.iter().find(|part| !val.contains(part.as_str())) {
-                            env.error(format!("String does not contain {:?}", part))
-                        } else {
-                            env.error("String did not match format string pattern")
-                        },
-                    );
-                }
-                let captures = re.captures(val.as_ref()).unwrap();
-                let caps: Vec<_> = captures.iter().skip(1).flatten().collect();
-                for cap in caps.into_iter().rev() {
-                    env.push(cap.as_str());
-                }
-                Ok(())
-            })?;
+            abort_txt("you really though that tinyuiua has fmt pattern matching?");
         }
     }
     Ok(())

@@ -7,7 +7,6 @@ use std::{
 
 use bytemuck::must_cast;
 use ecow::EcoVec;
-use serde::*;
 
 use crate::{
     algorithm::ArrayCmpSlice, val_as_arr, Array, ArrayValue, Boxed, Complex, FormatShape, Uiua,
@@ -336,7 +335,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MapKeys {
     pub(crate) keys: Value,
     indices: Vec<usize>,

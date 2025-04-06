@@ -9,7 +9,6 @@ use std::{
 use bitflags::bitflags;
 use bytemuck::must_cast;
 use ecow::{EcoString, EcoVec};
-use serde::{de::DeserializeOwned, *};
 
 use crate::{
     algorithm::map::{MapKeys, EMPTY_NAN, TOMBSTONE_NAN},
@@ -20,15 +19,7 @@ use crate::{
 };
 
 /// Uiua's array type
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(
-    from = "ArrayRep<T>",
-    into = "ArrayRep<T>",
-    bound(
-        serialize = "T: ArrayValueSer + Serialize",
-        deserialize = "T: ArrayValueSer + Deserialize<'de>"
-    )
-)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct Array<T> {
     pub(crate) shape: Shape,
@@ -37,22 +28,17 @@ pub struct Array<T> {
 }
 
 /// Non-shape metadata for an array
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ArrayMeta {
     /// The label
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<EcoString>,
     /// Flags for the array
-    #[serde(default, skip_serializing_if = "ArrayFlags::is_empty")]
     pub flags: ArrayFlags,
     /// The keys of a map array
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map_keys: Option<MapKeys>,
     /// The pointer value for FFI
-    #[serde(skip)]
     pub pointer: Option<MetaPtr>,
     /// The kind of system handle
-    #[serde(skip)]
     pub handle_kind: Option<HandleKind>,
 }
 
@@ -131,7 +117,7 @@ impl Eq for MetaPtr {}
 
 bitflags! {
     /// Flags for an array
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
     pub struct ArrayFlags: u8 {
         /// No flags
         const NONE = 0;
@@ -1390,12 +1376,7 @@ impl<T: fmt::Display> fmt::Display for FormatShape<'_, T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-#[serde(bound(
-    serialize = "T: ArrayValueSer + Serialize",
-    deserialize = "T: ArrayValueSer + Deserialize<'de>"
-))]
+#[derive(Debug, Clone)]
 enum ArrayRep<T: ArrayValueSer> {
     List(T::Collection),
     Scalar(T::Scalar),
@@ -1461,8 +1442,8 @@ impl<T: ArrayValueSer> From<Array<T>> for ArrayRep<T> {
 }
 
 trait ArrayValueSer: ArrayValue + fmt::Debug {
-    type Scalar: Serialize + DeserializeOwned + fmt::Debug + From<Self> + Into<Self>;
-    type Collection: Serialize + DeserializeOwned + fmt::Debug;
+    type Scalar: fmt::Debug + From<Self> + Into<Self>;
+    type Collection: fmt::Debug;
     fn make_collection(data: CowSlice<Self>) -> Self::Collection;
     fn make_data(collection: Self::Collection) -> CowSlice<Self>;
     /// Do not use the [`ArrayRep::Scalar`] variant
@@ -1482,11 +1463,9 @@ impl ArrayValueSer for u8 {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 enum BoxCollection {
-    #[serde(rename = "empty_boxes")]
     Empty([Boxed; 0]),
-    #[serde(untagged)]
     List(CowSlice<Boxed>),
 }
 
@@ -1508,11 +1487,9 @@ impl ArrayValueSer for Boxed {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 enum ComplexCollection {
-    #[serde(rename = "empty_complex")]
     Empty([Complex; 0]),
-    #[serde(untagged)]
     List(CowSlice<Complex>),
 }
 
@@ -1562,19 +1539,13 @@ impl ArrayValueSer for char {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
 enum F64Rep {
-    #[serde(rename = "NaN")]
     NaN,
-    #[serde(rename = "empty")]
     MapEmpty,
-    #[serde(rename = "tomb")]
     MapTombstone,
-    #[serde(rename = "∞")]
     Infinity,
-    #[serde(rename = "-∞")]
     NegInfinity,
-    #[serde(untagged)]
     Num(f64),
 }
 

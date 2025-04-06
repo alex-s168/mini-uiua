@@ -8,7 +8,6 @@ use std::{
 };
 
 use ecow::{EcoString, EcoVec};
-use serde::*;
 
 use crate::{
     algorithm::{map::MapKeys, pervade::*, ErrorContext, FillContext},
@@ -21,8 +20,7 @@ use crate::{
 /// A generic array value
 ///
 /// This enum is used to represent all possible array types.
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Clone)]
 #[repr(C)]
 pub enum Value {
     /// Byte array used for some boolean operations and for I/O

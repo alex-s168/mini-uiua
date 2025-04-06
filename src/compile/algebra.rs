@@ -2,7 +2,6 @@ use core::f64;
 use std::{array, cmp::Ordering, collections::BTreeMap, f64::consts::E, fmt, mem::take, ops};
 
 use ecow::eco_vec;
-use serde::*;
 
 use crate::{
     Assembly, Complex,
@@ -306,7 +305,7 @@ fn nodes_expr(node: &[Node], asm: &Assembly) -> AlgebraData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AlgebraError {
     TooManyVariables,
     NotSupported(String),

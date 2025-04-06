@@ -1,12 +1,9 @@
 use std::{fmt, hash::Hash};
 
-use serde::*;
-
 use crate::{CodeSpan, Ident, Primitive};
 
 /// A function stack signature
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-#[serde(from = "(usize, usize)", into = "(usize, usize)")]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Signature {
     /// The number of arguments the function pops off the stack
     pub args: usize,
@@ -85,7 +82,7 @@ impl fmt::Display for Signature {
 }
 
 /// A function that executes Rust code
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DynamicFunction {
     /// An index used to look up the function
     pub(crate) index: usize,
@@ -119,8 +116,7 @@ impl fmt::Debug for DynamicFunction {
 }
 
 /// A Uiua function id
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FunctionId {
     /// Just a primitive
     Primitive(Primitive),

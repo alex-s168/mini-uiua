@@ -469,7 +469,6 @@ impl Spanner {
             let sys = &crate::SafeSys::new();
             let val = constant.value.resolve(path, sys);
             let meta = BindingMeta {
-                comment: Some(constant.doc().into()),
                 ..Default::default()
             };
             return Some(BindingDocs {

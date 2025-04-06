@@ -11,7 +11,6 @@ use std::{
 
 use ecow::{eco_vec, EcoString, EcoVec};
 use indexmap::IndexSet;
-use serde::*;
 
 use crate::{
     check::SigCheckError,
@@ -65,27 +64,20 @@ node!(
     /// Set a local value
     SetLocal { def: usize, span: usize },
     /// Push a value onto the stack
-    (#[serde(untagged)] rep),
     Push(val(Value)),
     /// Run a primitive function
-    (#[serde(untagged)] rep),
     Prim(prim(Primitive), span(usize)),
     /// Run an implementation primitive function
-    (#[serde(untagged)] rep),
     ImplPrim(prim(ImplPrimitive), span(usize)),
     /// Run a modifier
-    (#[serde(untagged)] rep),
     Mod(prim(Primitive), args(Ops), span(usize)),
     /// Run an implementation modifier
-    (#[serde(untagged)] rep),
     ImplMod(prim(ImplPrimitive), args(Ops), span(usize)),
     /// Call a function
-    (#[serde(untagged)] rep),
     Call(func(Function), span(usize)),
     /// Run some nodes in sequence.
     ///
     /// Do not edit the list directly. Use functions like [`Node::push`] and [`Node::prepend`] instead.
-    (#[serde(untagged)] rep),
     Run(nodes(EcoVec<Node>)),
 );
 
@@ -159,25 +151,12 @@ impl From<Arc<Node>> for Node {
     }
 }
 
-impl Serialize for SigNode {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        (self.sig.args, self.sig.outputs, &self.node).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for SigNode {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let (args, outputs, node) = <(usize, usize, Node)>::deserialize(deserializer)?;
-        Ok(SigNode::new(Signature::new(args, outputs), node))
-    }
-}
-
 pub(crate) type Ops = EcoVec<SigNode>;
 
 /// The length of an array when being constructed
 ///
 /// This is used by [`Node::Array`]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ArrayLen {
     /// A static number of rows
     Static(usize),
@@ -195,19 +174,15 @@ impl fmt::Display for ArrayLen {
 }
 
 /// A custom inverse node
-#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(default)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct CustomInverse {
     /// The normal function to call
     pub normal: InversionResult<SigNode>,
     /// The un inverse
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub un: Option<SigNode>,
     /// The under inverse
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub under: Option<(SigNode, SigNode)>,
     /// The anti inverse
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub anti: Option<SigNode>,
     /// Whether this was created with obverse
     ///
@@ -954,10 +929,9 @@ macro_rules! node {
         /// A Uiua execution tree node
         ///
         /// A node is a tree structure of instructions. It can be used as both a single unit as well as a list.
-        #[derive(Clone, Serialize, Deserialize)]
+        #[derive(Clone)]
         #[repr(u8)]
         #[allow(missing_docs)]
-        #[serde(from = "NodeRep", into = "NodeRep")]
         pub enum Node {
             $(
                 $(#[$attr])*
@@ -1039,10 +1013,7 @@ macro_rules! node {
             }
         }
 
-        #[derive(Serialize, Deserialize)]
-        #[serde(rename_all = "snake_case")]
         pub(crate) enum NodeRep {
-            #[serde(rename = "e")]
             Empty(),
             $(
                 $(#[$rep_attr])?
