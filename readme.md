@@ -1,4 +1,11 @@
 
+# mini-uiua building
+
+```
+rustup +nightly target add wasm32-wasip1
+RUSTFLAGS="-Zlocation-detail=none" cargo +nightly build --release --target wasm32-wasip1
+```
+
 <img src="site/assets/uiua-logo.png" width="140"/> 
 
 # Uiua
