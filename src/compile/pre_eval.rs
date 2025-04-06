@@ -160,17 +160,8 @@ impl Compiler {
             }
             let mut asm = self.asm.clone();
             asm.root = node.clone();
-            let mut env = if self.pre_eval_mode == PreEvalMode::Lsp {
-                #[cfg(feature = "native_sys")]
-                {
-                    Uiua::with_native_sys()
-                }
-                #[cfg(not(feature = "native_sys"))]
-                Uiua::with_safe_sys()
-            } else {
-                Uiua::with_safe_sys()
-            }
-            .with_execution_limit(Duration::from_millis(40));
+            let mut env = Uiua::with_safe_sys()
+                .with_execution_limit(Duration::from_millis(40));
             match env.run_asm(asm) {
                 Ok(()) => {
                     let stack = env.take_stack();

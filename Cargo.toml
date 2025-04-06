@@ -14,7 +14,7 @@ version = "0.15.0-dev.2"
 [dependencies]
 # Core dependencies
 bitflags = {version = "2"}
-bytemuck = {version = "1.17", features = ["must_cast", "derive", "extern_crate_alloc"]}
+bytemuck = {version = "1.17", features = ["must_cast", "extern_crate_alloc"]}
 ctor = "0.3.6"
 ecow = {version = "0.2.3"}
 enum-iterator = "2.0.0"
@@ -24,6 +24,7 @@ pathdiff = "0.2.1"
 time = {version = "0.3.36", features = ["local-offset"]}
 tinyvec = {version = "1", features = ["alloc"]}
 unicode-segmentation = "1.10"
+wasm-bindgen = "0.2.100"
 
 [features]
 
