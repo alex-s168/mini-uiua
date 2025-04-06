@@ -464,7 +464,7 @@ impl Spanner {
                 None
             };
             let sys = &crate::SafeSys::new();
-            let val = constant.value.resolve(path, sys);
+            let val = (constant.value)();
             let meta = BindingMeta {
                 ..Default::default()
             };
@@ -481,23 +481,6 @@ impl Spanner {
 
     fn make_binding_docs(&self, binfo: &BindingInfo) -> BindingDocs {
         let mut meta = binfo.meta.clone();
-        if meta.comment.is_none() {
-            let name = binfo.span.as_str(&self.asm.inputs, |s| s.to_string());
-            meta.comment = match name.as_str() {
-                "🦈" | "🏳️‍⚧️" => Some("Trans rights".into()),
-                "🤠" => Some("This town ain't big enough for the ∩ of us".into()),
-                "👽" => Some("Ayy, lmao".into()),
-                "🐈" | "😺" | "😸" | "😹" | "😻" | "😼" | "😽" | "🙀" | "🐱‍👤" => {
-                    Some("Meow".into())
-                }
-                "🐕" | "🐶" | "🦮" | "🐕‍🦺" => Some("Woof".into()),
-                "🐖" | "🐷" | "🐽" /* | "👮" */ => Some("Oink".into()),
-                "🐄" | "🐮" => Some("Moo".into()),
-                "🐸" => Some("Ribbit".into()),
-                "ඞ" => Some("SUS".into()),
-                _ => None,
-            };
-        }
         if meta.comment.is_none() {
             match &binfo.kind {
                 BindingKind::Const(None) => meta.comment = Some("constant".into()),

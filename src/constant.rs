@@ -1,7 +1,5 @@
-use std::path::Path;
-
 use crate::{
-    SysBackend, Value, WILDCARD_NAN,
+    Value, WILDCARD_NAN,
 };
 
 /// The definition of a shadowable constant
@@ -14,24 +12,8 @@ pub struct ConstantDef {
     pub value: ConstantValue,
 }
 
-/// The value of a shadowable constant
-pub enum ConstantValue {
-    /// A static value that is always the same
-    Static(fn() -> Value),
-}
-
-impl ConstantValue {
-    /// Resolve the constant to a value
-    pub(crate) fn resolve(
-        &self,
-        current_file_path: Option<&Path>,
-        backend: &dyn SysBackend,
-    ) -> Value {
-        match self {
-            ConstantValue::Static(val) => val(),
-        }
-    }
-}
+/// The value of a constant
+pub type ConstantValue = fn() -> Value;
 
 macro_rules! constant {
     ($($(#[doc = $doc:literal])+ ($(#[$attr:meta])* $name:literal, $class:ident, $value:expr)),* $(,)?) => {
@@ -52,7 +34,7 @@ macro_rules! constant {
                 $(#[$attr])*
                 ConstantDef {
                     name: $name,
-                    value: ConstantValue::Static(|| {$value.into()}),
+                    value: || {$value.into()},
                     class: ConstClass::$class,
                 },
             )*];

@@ -1756,22 +1756,10 @@ code:
             self.code_meta
                 .constant_references
                 .insert(span.clone().sp(ident));
-            Ok(Node::Push(
-                constant
-                    .value
-                    .resolve(self.scope_file_path(), &*self.backend()),
-            ))
+            Ok(Node::Push((constant.value)()))
         } else {
             Err(self.error(span, format!("Unknown identifier `{ident}`")))
         }
-    }
-    fn scope_file_path(&self) -> Option<&Path> {
-        for scope in self.scopes() {
-            if let Some(file_path) = &scope.file_path {
-                return Some(file_path);
-            }
-        }
-        None
     }
     fn global_index(&mut self, index: usize, single_ident: bool, span: CodeSpan) -> Node {
         let global = self.asm.bindings[index].kind.clone();
