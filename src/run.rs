@@ -11,11 +11,11 @@ use std::{
     str::FromStr,
     sync::Arc,
     time::Duration,
+    time::{SystemTime, UNIX_EPOCH},
+    io::Write,
 };
 
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use ecow::EcoVec;
-use thread_local::ThreadLocal;
 
 use crate::{
     algorithm::{self, validate_size_impl},
@@ -28,6 +28,54 @@ use crate::{
     VERSION,
 };
 
+static mut STATE: u64 = 0; // Global PRNG state
+
+#[ctor::ctor]
+fn auto_seed() {
+    unsafe {
+        STATE = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64;
+    }
+}
+
+pub(crate) fn rand() -> u64 {
+    unsafe {
+        STATE = ((1664525u64).wrapping_mul(STATE).wrapping_add(1013904223u64)) % u64::MAX;
+        STATE
+    }
+}
+
+pub(crate) fn randf() -> f32 {
+    (rand() as f32) / (u64::MAX as f32)
+}
+
+pub(crate) fn rand_range(from: f32, to: f32) -> f32 {
+    randf() * (to - from) + from
+}
+
+pub(crate) fn shuffle<T>(vec: &mut [T]) {
+    let len = vec.len();
+    for i in (1..len).rev() {
+        let j = rand_range(0.0, (i + 1) as f32) as usize;
+        vec.swap(i, j);
+    }
+}
+
+pub(crate) fn abort_txt(txt: &str) -> ! {
+    let _ = std::io::stderr().write_all(txt.as_bytes());
+    std::process::abort()
+}
+
+#[inline]
+pub(crate) fn unwrap_abort<T>(o: Option<T>) -> T {
+    match o {
+        Some(t) => t,
+        None => abort_txt("unwrap fail"),
+    }
+}
+
 /// The Uiua interpreter
 #[derive(Clone)]
 pub struct Uiua {
@@ -39,9 +87,9 @@ pub struct Uiua {
 /// Runtime-only data
 #[derive(Clone)]
 pub(crate) struct Runtime {
-    /// The thread's stack
+    /// The stack
     pub(crate) stack: Vec<Value>,
-    /// The thread's under stack
+    /// The under stack
     pub(crate) under_stack: Vec<Value>,
     /// The call stack
     pub(crate) call_stack: Vec<StackFrame>,
@@ -82,12 +130,8 @@ pub(crate) struct Runtime {
     pub(crate) unevaluated_constants: HashMap<usize, Node>,
     /// The system backend
     pub(crate) backend: Arc<dyn SysBackend>,
-    /// The thread interface
-    thread: ThisThread,
     /// Values for output comments
     pub(crate) output_comments: HashMap<usize, Vec<Vec<Value>>>,
-    /// Memoized values
-    pub(crate) memo: Arc<ThreadLocal<RefCell<MemoMap>>>,
     /// The results of tests
     pub(crate) test_results: Vec<UiuaResult>,
     /// Reports to print
@@ -119,38 +163,6 @@ pub(crate) struct StackFrame {
     spans: Vec<(usize, Option<Primitive>)>,
     /// The stack height at the start of the function
     pub(crate) start_height: usize,
-}
-
-#[derive(Debug, Clone)]
-struct Channel {
-    pub send: Sender<Value>,
-    pub recv: Receiver<Value>,
-}
-
-#[derive(Debug, Clone)]
-struct ThisThread {
-    pub parent: Option<Channel>,
-    pub children: HashMap<usize, Thread>,
-    pub next_child_id: usize,
-}
-
-impl Default for ThisThread {
-    fn default() -> Self {
-        Self {
-            parent: Default::default(),
-            children: Default::default(),
-            next_child_id: 1,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Thread {
-    #[cfg(not(target_arch = "wasm32"))]
-    pub recv: Receiver<UiuaResult<Vec<Value>>>,
-    #[cfg(target_arch = "wasm32")]
-    pub result: UiuaResult<Vec<Value>>,
-    pub channel: Channel,
 }
 
 impl Default for Uiua {
@@ -215,14 +227,129 @@ impl Default for Runtime {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(100),
             interrupted: None,
-            thread: ThisThread::default(),
             output_comments: HashMap::new(),
-            memo: Arc::new(ThreadLocal::new()),
             unevaluated_constants: HashMap::new(),
             test_results: Vec::new(),
             reports: Vec::new(),
         }
     }
+}
+
+fn arr_from_raw<T: crate::array::ArrayValue>(data: *const T, len: u32) -> Array<T> {
+    let slice: &[T] = unsafe { std::slice::from_raw_parts(data, len as usize) };
+    slice.into()
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_from_u8(data: *const u8, len: u32) -> *mut Value {
+    let value = Value::Byte(arr_from_raw(data, len));
+    let boxx = Box::<Value>::new(value);
+    Box::into_raw(boxx)
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_from_f64(data: *const f64, len: u32) -> *mut Value {
+    let value = Value::Num(arr_from_raw(data, len));
+    let boxx = Box::<Value>::new(value);
+    Box::into_raw(boxx)
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_box(data: *mut *mut Value, len: u32) -> *mut Value {
+    let args = unsafe { Vec::from_raw_parts(data, len as usize, len as usize) };
+    let mut out = Vec::new();
+    for xp in args {
+        let x = *unsafe { std::boxed::Box::from_raw(xp) };
+        out.push(Boxed(x));
+    }
+
+    let value = Value::Box(out.as_slice().into());
+    let boxx = Box::<Value>::new(value);
+    Box::into_raw(boxx)
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_out_val_free(val: *mut Value) {
+    unsafe { drop(std::boxed::Box::from_raw(val)); }
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_rank(valp: *const Value) -> u32 {
+    let val = unsafe { valp.as_ref().unwrap() };
+    val.rank() as u32
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_shape(valp: *const Value, shape_out: *mut u32) {
+    let val = unsafe { valp.as_ref().unwrap() };
+    for (i,x) in val.shape().iter().enumerate() {
+        unsafe { *shape_out.wrapping_add(i) = *x as u32; }
+    }
+}
+
+fn arr_to_raw<T: crate::array::ArrayValue>(arr: &Array<T>, dest: *mut T) {
+    for (i,v) in arr.data.iter().enumerate() {
+        unsafe { *dest.wrapping_add(i) = v.clone(); }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_to_u8(valp: *const Value, out: *mut u8) {
+    let val = unsafe { valp.as_ref().unwrap() };
+    arr_to_raw(val.as_byte_array().unwrap(), out);
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_to_f64(valp: *const Value, out: *mut f64) {
+    let val = unsafe { valp.as_ref().unwrap() };
+    arr_to_raw(val.as_num_array().unwrap(), out);
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_val_to_box_clone(valp: *const Value, out: *mut *mut Value) {
+    let val = unsafe { valp.as_ref().unwrap() };
+    for (i,v) in val.as_box_array().unwrap().data.iter().enumerate() {
+        let boxx = Box::<Value>::new(v.as_value().clone());
+        unsafe { *out.wrapping_add(i) = Box::into_raw(boxx); }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_alloc(num: u32) -> *mut u8 {
+    let mut foo = Vec::<u8>::with_capacity(num as usize);
+
+    let ptr = foo.as_mut_ptr();
+    std::mem::forget(foo);
+    ptr
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_free(ptr: *mut u8, num: u32) {
+    let _foo = unsafe { Vec::from_raw_parts(ptr, 0, num as usize) };
+}
+
+#[no_mangle]
+pub extern "C" fn uiua_ptr_size() -> u32 {
+    std::mem::size_of::<usize>() as u32
+}
+
+// args will be freed! returns boxed array of values
+#[no_mangle]
+pub extern "C" fn uiua_run(src_in: *const u8, src_length: u32, args_len: u32, args_in: *mut *mut Value) -> *mut Value {
+    let src = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(src_in, src_length as usize)) }; 
+    let args = unsafe { Vec::from_raw_parts(args_in, args_len as usize, args_len as usize) };
+
+    let mut uiua = Uiua::with_safe_sys();
+    for xp in args {
+        let x = unsafe { std::boxed::Box::from_raw(xp) };
+        uiua.push(*x);
+    }
+    uiua.run_str(src).unwrap();
+
+    let out = uiua.rt.stack.into_iter().map(|x| Boxed(x)).collect::<Vec<_>>();
+    let value = Value::Box(out.as_slice().into());
+    let boxx = Box::<Value>::new(value);
+    Box::into_raw(boxx)
 }
 
 impl Uiua {
@@ -381,22 +508,6 @@ impl Uiua {
             let mut res = env
                 .catching_crash(|env| env.exec(env.asm.root.clone()))
                 .unwrap_or_else(Err);
-            let mut push_error = |te: UiuaError| match &mut res {
-                Ok(()) => res = Err(te),
-                Err(e) => e.multi.push(te),
-            };
-            if env.asm.test_assert_count > 0 {
-                let total_run = env.rt.test_results.len();
-                let not_run = env.asm.test_assert_count.saturating_sub(total_run);
-                let mut successes = 0;
-                for res in env.rt.test_results.drain(..) {
-                    match res {
-                        Ok(()) => successes += 1,
-                        Err(e) => push_error(e),
-                    }
-                }
-                (env.rt.reports).push(Report::tests(successes, total_run - successes, not_run));
-            }
             if res.is_err() {
                 env.rt = Runtime {
                     backend: env.rt.backend.clone(),
@@ -1456,230 +1567,6 @@ impl Uiua {
         } else {
             Ok(())
         }
-    }
-    /// Spawn a thread
-    pub(crate) fn spawn(&mut self, capture_count: usize, _pool: bool, f: SigNode) -> UiuaResult {
-        if !self.rt.backend.allow_thread_spawning() {
-            return Err(self.error("Thread spawning is not allowed in this environment"));
-        }
-        if self.rt.stack.len() < capture_count {
-            return Err(self.error(format!(
-                "Expected at least {} value(s) on the stack, but there are {}",
-                capture_count,
-                self.rt.stack.len()
-            )))?;
-        }
-        let (this_send, child_recv) = crossbeam_channel::unbounded();
-        let (child_send, this_recv) = crossbeam_channel::unbounded();
-        let thread = ThisThread {
-            parent: Some(Channel {
-                send: child_send,
-                recv: child_recv,
-            }),
-            ..ThisThread::default()
-        };
-        let mut env = Uiua {
-            asm: self.asm.clone(),
-            rt: Runtime {
-                stack: (self.rt.stack)
-                    .drain(self.rt.stack.len() - capture_count..)
-                    .collect(),
-                under_stack: Vec::new(),
-                local_stack: self.rt.local_stack.clone(),
-                fill_stack: Vec::new(),
-                fill_boundary_stack: Vec::new(),
-                unfill_stack: Vec::new(),
-                recur_stack: self.rt.recur_stack.clone(),
-                call_stack: Vec::from_iter(self.rt.call_stack.last().cloned()),
-                array_depth: 0,
-                time_instrs: self.rt.time_instrs,
-                last_time: self.rt.last_time,
-                cli_arguments: self.rt.cli_arguments.clone(),
-                cli_file_path: self.rt.cli_file_path.clone(),
-                backend: self.rt.backend.clone(),
-                execution_limit: self.rt.execution_limit,
-                execution_start: self.rt.execution_start,
-                recursion_limit: self.rt.recursion_limit,
-                interrupted: self.rt.interrupted.clone(),
-                output_comments: HashMap::new(),
-                memo: self.rt.memo.clone(),
-                unevaluated_constants: HashMap::new(),
-                test_results: Vec::new(),
-                reports: Vec::new(),
-                thread,
-            },
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        let recv = {
-            let (send, recv) = crossbeam_channel::unbounded();
-            if _pool {
-                rayon::spawn(move || _ = send.send(env.exec(f).map(|_| env.take_stack())));
-            } else {
-                std::thread::Builder::new()
-                    .spawn(move || _ = send.send(env.exec(f).map(|_| env.take_stack())))
-                    .map_err(|e| self.error(format!("Error spawning thread: {e}")))?;
-            }
-            recv
-        };
-        #[cfg(target_arch = "wasm32")]
-        let result = env.exec(f).map(|_| env.take_stack());
-
-        let id = self.rt.thread.next_child_id;
-        self.rt.thread.next_child_id += 1;
-        self.rt.thread.children.insert(
-            id,
-            Thread {
-                #[cfg(not(target_arch = "wasm32"))]
-                recv,
-                #[cfg(target_arch = "wasm32")]
-                result,
-                channel: Channel {
-                    send: this_send,
-                    recv: this_recv,
-                },
-            },
-        );
-        self.push(id);
-        Ok(())
-    }
-    /// Wait for a thread to finish
-    pub(crate) fn wait(&mut self, id: Value) -> UiuaResult {
-        let ids = id.as_natural_array(self, "Thread id must be an array of natural numbers")?;
-        if ids.shape.is_empty() {
-            let handle = ids.data[0];
-            #[cfg(not(target_arch = "wasm32"))]
-            let mut thread_stack = self
-                .rt
-                .thread
-                .children
-                .remove(&handle)
-                .ok_or_else(|| self.error("Invalid thread id"))?
-                .recv
-                .recv()
-                .unwrap()?;
-            #[cfg(target_arch = "wasm32")]
-            let mut thread_stack = self
-                .rt
-                .thread
-                .children
-                .remove(&handle)
-                .ok_or_else(|| self.error("Invalid thread id"))?
-                .result?;
-            match thread_stack.len() {
-                0 => self.push(Value::default()),
-                1 => self.push(thread_stack.into_iter().next().unwrap()),
-                _ => {
-                    thread_stack.reverse();
-                    self.push(Value::from_row_values(thread_stack, self)?)
-                }
-            }
-        } else {
-            let mut rows = Vec::new();
-            for handle in ids.data {
-                #[cfg(not(target_arch = "wasm32"))]
-                let mut thread_stack = self
-                    .rt
-                    .thread
-                    .children
-                    .remove(&handle)
-                    .ok_or_else(|| self.error("Invalid thread id"))?
-                    .recv
-                    .recv()
-                    .unwrap()?;
-                #[cfg(target_arch = "wasm32")]
-                let mut thread_stack = self
-                    .rt
-                    .thread
-                    .children
-                    .remove(&handle)
-                    .ok_or_else(|| self.error("Invalid thread id"))?
-                    .result?;
-                let row = if thread_stack.len() == 1 {
-                    thread_stack.into_iter().next().unwrap()
-                } else {
-                    thread_stack.reverse();
-                    Value::from_row_values(thread_stack, self)?
-                };
-                rows.push(row);
-            }
-            let mut val = Value::from_row_values(rows, self)?;
-            let mut shape = ids.shape;
-            shape.extend_from_slice(&val.shape()[1..]);
-            *val.shape_mut() = shape;
-            self.push(val);
-        }
-        Ok(())
-    }
-    pub(crate) fn send(&self, id: Value, value: Value) -> UiuaResult {
-        if cfg!(target_arch = "wasm32") {
-            return Err(self.error("send is not supported in this environment"));
-        }
-        let ids = id.as_natural_array(self, "Thread id must be an array of natural numbers")?;
-        for id in ids.data {
-            self.channel(id)?
-                .send
-                .send(value.clone())
-                .map_err(|_| self.error("Thread channel closed"))?;
-        }
-        Ok(())
-    }
-    pub(crate) fn recv(&mut self, id: Value) -> UiuaResult {
-        if cfg!(target_arch = "wasm32") {
-            return Err(self.error("recv is not supported in this environment"));
-        }
-        let ids = id.as_natural_array(self, "Thread id must be an array of natural numbers")?;
-        let mut values = Vec::with_capacity(ids.data.len());
-        for id in ids.data {
-            values.push(self.channel(id)?.recv.recv().map_err(|_| {
-                if let Err(e) = self.wait(id.into()) {
-                    e
-                } else {
-                    self.error("Thread channel closed")
-                }
-            })?);
-        }
-        let mut val = Value::from_row_values(values, self)?;
-        let mut shape = ids.shape;
-        shape.extend_from_slice(&val.shape()[1..]);
-        *val.shape_mut() = shape;
-        self.push(val);
-        Ok(())
-    }
-    pub(crate) fn try_recv(&mut self, id: Value) -> UiuaResult {
-        if cfg!(target_arch = "wasm32") {
-            return Err(self.error("try_recv is not supported in this environment"));
-        }
-        let id = id.as_nat(self, "Thread id must be a natural number")?;
-        let value = match self.channel(id)?.recv.try_recv() {
-            Ok(value) => value,
-            Err(TryRecvError::Empty) => return Err(self.error("No value available")),
-            Err(_) => {
-                return Err(if let Err(e) = self.wait(id.into()) {
-                    e
-                } else {
-                    self.error("Thread channel closed")
-                })
-            }
-        };
-        self.push(value);
-        Ok(())
-    }
-    fn channel(&self, id: usize) -> UiuaResult<&Channel> {
-        Ok(if id == 0 {
-            self.rt
-                .thread
-                .parent
-                .as_ref()
-                .ok_or_else(|| self.error("Thread has no parent"))?
-        } else {
-            &self
-                .rt
-                .thread
-                .children
-                .get(&id)
-                .ok_or_else(|| self.error("Invalid thread id"))?
-                .channel
-        })
     }
 }
 

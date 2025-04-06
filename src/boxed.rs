@@ -5,16 +5,12 @@ use std::{
     fmt,
 };
 
-use serde::*;
-
 use crate::value::Value;
 
 /// The element type for box arrays
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-#[serde(from = "BoxedRep", into = "BoxedRep")]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Boxed(pub Value);
 
-#[derive(Serialize, Deserialize)]
 struct BoxedRep {
     b: Value,
 }

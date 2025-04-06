@@ -7,7 +7,7 @@ use std::{
 use ecow::eco_vec;
 
 use crate::{algorithm::loops::flip, array::*, Uiua, UiuaError, UiuaResult, Value};
-use crate::{Complex, Shape};
+use crate::Shape;
 
 use super::{multi_output, FillContext, MultiOutput};
 
@@ -751,9 +751,6 @@ pub mod not {
     pub fn bool(a: u8) -> u8 {
         a ^ 1u8
     }
-    pub fn com(a: Complex) -> Complex {
-        1.0 - a
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot not {a}"))
     }
@@ -790,9 +787,6 @@ pub mod scalar_neg {
     pub fn char(a: char) -> char {
         toggle_char_case(a)
     }
-    pub fn com(a: Complex) -> Complex {
-        -a
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot negate {a}"))
     }
@@ -816,9 +810,6 @@ pub mod scalar_abs {
         } else {
             a
         }
-    }
-    pub fn com(a: Complex) -> f64 {
-        a.abs()
     }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot take the absolute value of {a}"))
@@ -852,9 +843,6 @@ pub mod sign {
     pub fn char(a: char) -> f64 {
         character_sign(a)
     }
-    pub fn com(a: Complex) -> Complex {
-        a.normalize()
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the sign of {a}"))
     }
@@ -870,9 +858,6 @@ pub mod sqrt {
     pub fn bool(a: u8) -> u8 {
         a
     }
-    pub fn com(a: Complex) -> Complex {
-        a.sqrt()
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot take the square root of {a}"))
     }
@@ -884,9 +869,6 @@ pub mod sin {
     }
     pub fn byte(a: u8) -> f64 {
         f64::from(a).sin()
-    }
-    pub fn com(a: Complex) -> Complex {
-        a.sin()
     }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the sine of {a}"))
@@ -900,9 +882,6 @@ pub mod cos {
     pub fn byte(a: u8) -> f64 {
         f64::from(a).cos()
     }
-    pub fn com(a: Complex) -> Complex {
-        a.cos()
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the cosine of {a}"))
     }
@@ -914,9 +893,6 @@ pub mod asin {
     }
     pub fn byte(a: u8) -> f64 {
         f64::from(a).asin()
-    }
-    pub fn com(a: Complex) -> Complex {
-        a.asin()
     }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the arcsine of {a}"))
@@ -930,9 +906,6 @@ pub mod acos {
     pub fn byte(a: u8) -> f64 {
         f64::from(a).acos()
     }
-    pub fn com(a: Complex) -> Complex {
-        a.acos()
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the arcsine of {a}"))
     }
@@ -944,9 +917,6 @@ pub mod floor {
     }
     pub fn byte(a: u8) -> u8 {
         a
-    }
-    pub fn com(a: Complex) -> Complex {
-        a.floor()
     }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the floor of {a}"))
@@ -960,9 +930,6 @@ pub mod ceil {
     pub fn byte(a: u8) -> u8 {
         a
     }
-    pub fn com(a: Complex) -> Complex {
-        a.ceil()
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the ceiling of {a}"))
     }
@@ -975,41 +942,8 @@ pub mod round {
     pub fn byte(a: u8) -> u8 {
         a
     }
-    pub fn com(a: Complex) -> Complex {
-        a.round()
-    }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the rounded value of {a}"))
-    }
-}
-
-pub mod complex_re {
-    use super::*;
-
-    pub fn com(a: Complex) -> f64 {
-        a.re
-    }
-    pub fn generic<T>(a: T) -> T {
-        a
-    }
-    pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
-        env.error(format!("Cannot get the real part of {a}"))
-    }
-}
-pub mod complex_im {
-    use super::*;
-
-    pub fn com(a: Complex) -> f64 {
-        a.im
-    }
-    pub fn num(_a: f64) -> f64 {
-        0.0
-    }
-    pub fn byte(_a: u8) -> u8 {
-        0
-    }
-    pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
-        env.error(format!("Cannot get the imaginary part of {a}"))
     }
 }
 
@@ -1025,12 +959,6 @@ macro_rules! eq_impl {
             }
             pub fn num_num(a: f64, b: f64) -> u8 {
                 (b.array_cmp(&a) $eq $ordering) as u8
-            }
-            pub fn com_x(a: Complex, b: impl Into<Complex>) -> u8 {
-                (b.into().array_cmp(&a) $eq $ordering) as u8
-            }
-            pub fn x_com(a: impl Into<Complex>, b: Complex) -> u8 {
-                (b.array_cmp(&a.into()) $eq $ordering) as u8
             }
             pub fn byte_num(a: u8, b: f64) -> u8 {
                 (b.array_cmp(&f64::from(a)) $eq $ordering) as u8
@@ -1063,20 +991,6 @@ macro_rules! cmp_impl {
             }
             pub fn num_num(a: f64, b: f64) -> u8 {
                 (b.array_cmp(&a) $eq $ordering) as u8
-            }
-            pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-                let b = b.into();
-                Complex::new(
-                    (b.re.array_cmp(&a.re) $eq $ordering) as u8 as f64,
-                    (b.im.array_cmp(&a.im) $eq $ordering) as u8 as f64
-                )
-            }
-            pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-                let a = a.into();
-                Complex::new(
-                    (b.re.array_cmp(&a.re) $eq $ordering) as u8 as f64,
-                    (b.im.array_cmp(&a.im) $eq $ordering) as u8 as f64
-                )
             }
             pub fn byte_num(a: u8, b: f64) -> u8 {
                 (b.array_cmp(&f64::from(a)) $eq $ordering) as u8
@@ -1121,12 +1035,6 @@ pub mod add {
     pub fn num_byte(a: f64, b: u8) -> f64 {
         a + f64::from(b)
     }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into() + a
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b + a.into()
-    }
     pub fn num_char(a: f64, b: char) -> char {
         char::from_u32((b as i64 + a as i64) as u32).unwrap_or('\0')
     }
@@ -1157,12 +1065,6 @@ pub mod sub {
     }
     pub fn num_byte(a: f64, b: u8) -> f64 {
         f64::from(b) - a
-    }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into() - a
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b - a.into()
     }
     pub fn num_char(a: f64, b: char) -> char {
         char::from_u32(((b as i64) - (a as i64)) as u32).unwrap_or('\0')
@@ -1196,16 +1098,6 @@ macro_rules! bin_op_mod {
             }
             pub fn num_byte($a: f64, $b: u8) -> f64 {
                 let $b = $byte_convert($b);
-                $f
-            }
-
-            pub fn com_x($a: Complex, $b: impl Into<Complex>) -> Complex {
-                let $b = $b.into();
-                $f
-            }
-
-            pub fn x_com($a: impl Into<Complex>, $b: Complex) -> Complex {
-                let $a = $a.into();
                 $f
             }
             pub fn error<T: Display>($a: T, $b: T, env: &Uiua) -> UiuaError {
@@ -1252,12 +1144,6 @@ pub mod mul {
     pub fn char_byte(a: char, _: u8) -> char {
         a
     }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into() * a
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b * a.into()
-    }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot multiply {a} and {b}"))
     }
@@ -1300,12 +1186,6 @@ pub mod set_sign {
     pub fn char_byte(a: char, b: u8) -> char {
         byte_char(b, a)
     }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        a * b.into().abs()
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        a.into() * b.abs()
-    }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot set sign of {b} to {a}"))
     }
@@ -1335,12 +1215,6 @@ pub mod div {
     pub fn byte_char(_: u8, b: char) -> char {
         b
     }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into() / a
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b / a.into()
-    }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot divide {b} by {a}"))
     }
@@ -1359,15 +1233,6 @@ pub mod modulus {
     }
     pub fn num_byte(a: f64, b: u8) -> f64 {
         num_num(a, b.into())
-    }
-    pub fn com_com(a: Complex, b: Complex) -> Complex {
-        b % a
-    }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into() % a
-    }
-    pub fn x_com(a: impl Into<f64>, b: Complex) -> Complex {
-        b % a.into()
     }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot modulo {a} and {b}"))
@@ -1442,14 +1307,6 @@ pub mod or {
     pub fn bool_bool(a: u8, b: u8) -> u8 {
         a | b
     }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        let b = b.into();
-        Complex::new(num_num(a.re, b.re), num_num(a.im, b.im))
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        let a = a.into();
-        Complex::new(num_num(a.re, b.re), num_num(a.im, b.im))
-    }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot or {a} and {b}"))
     }
@@ -1478,12 +1335,6 @@ pub mod scalar_pow {
     pub fn num_byte(a: f64, b: u8) -> f64 {
         f64::from(b).powf(a)
     }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into().powc(a)
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b.powc(a.into())
-    }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the power of {a} to {b}"))
     }
@@ -1502,12 +1353,6 @@ pub mod root {
     pub fn num_byte(a: f64, b: u8) -> f64 {
         f64::from(b).powf(1.0 / a)
     }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into().powc(1.0 / a)
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b.powc(1.0 / a.into())
-    }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the {a} root of {b}"))
     }
@@ -1521,33 +1366,6 @@ bin_op_mod!(
     b.log(a),
     "Cannot get the log base {a} of {b}"
 );
-pub mod complex {
-    use super::*;
-
-    pub fn num_num(a: f64, b: f64) -> Complex {
-        Complex::new(b, a)
-    }
-    pub fn byte_byte(a: u8, b: u8) -> Complex {
-        Complex::new(b.into(), a.into())
-    }
-    pub fn byte_num(a: u8, b: f64) -> Complex {
-        Complex::new(b, a.into())
-    }
-    pub fn num_byte(a: f64, b: u8) -> Complex {
-        Complex::new(b.into(), a)
-    }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into() + a * Complex::I
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b + a.into() * Complex::I
-    }
-    pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
-        env.error(format!(
-            "Cannot make a complex number with {b} as the real part and {a} as the imaginary part"
-        ))
-    }
-}
 
 pub mod max {
     use super::*;
@@ -1565,12 +1383,6 @@ pub mod max {
     }
     pub fn byte_num(a: u8, b: f64) -> f64 {
         num_num(a.into(), b)
-    }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        a.max(b.into())
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        a.into().max(b)
     }
     pub fn generic<T: Ord>(a: T, b: T) -> T {
         a.max(b)
@@ -1596,12 +1408,6 @@ pub mod min {
     }
     pub fn byte_num(a: u8, b: f64) -> f64 {
         num_num(a.into(), b)
-    }
-    pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        a.min(b.into())
-    }
-    pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        a.into().min(b)
     }
     pub fn generic<T: Ord>(a: T, b: T) -> T {
         a.min(b)

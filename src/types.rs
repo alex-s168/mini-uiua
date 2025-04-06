@@ -1,14 +1,13 @@
 use std::{array, cmp::Ordering, mem::take};
 
 use crate::{
-    cowslice::CowSlice, Array, Assembly, Boxed, Complex, ImplPrimitive, Node, PersistentMeta,
+    cowslice::CowSlice, Array, Assembly, Boxed, ImplPrimitive, Node, PersistentMeta,
     Primitive, Shape, SigNode, Uiua, Value,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum ScalarType {
     Real,
-    Complex,
     Char,
     Box(Option<Box<Ty>>),
 }
@@ -18,7 +17,6 @@ impl Value {
         match self {
             Value::Num(_) => ScalarType::Real,
             Value::Byte(_) => ScalarType::Real,
-            Value::Complex(_) => ScalarType::Complex,
             Value::Char(_) => ScalarType::Char,
             Value::Box(arr) => ScalarType::Box(if arr.data.is_empty() {
                 None
@@ -95,7 +93,6 @@ fn make_val(mut ty: Ty) -> Value {
     ty.shape.insert(0, 0);
     match ty.scalar {
         ScalarType::Real => Array::<u8>::new(ty.shape, CowSlice::default()).into(),
-        ScalarType::Complex => Array::<Complex>::new(ty.shape, CowSlice::default()).into(),
         ScalarType::Char => Array::<char>::new(ty.shape, CowSlice::default()).into(),
         ScalarType::Box(_) => Array::<Boxed>::new(ty.shape, CowSlice::default()).into(),
     }

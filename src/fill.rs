@@ -1,4 +1,4 @@
-use crate::{Array, Boxed, Complex, Uiua, Value};
+use crate::{Array, Boxed, Uiua, Value};
 
 pub struct Fill<'a> {
     env: &'a Uiua,
@@ -98,31 +98,11 @@ impl<'a> Fill<'a> {
             None => Err(self.error(false)),
         }
     }
-    pub(crate) fn complex_scalar(&self) -> Result<Complex, &'static str> {
-        match self.value() {
-            Some(Value::Num(n)) if n.rank() == 0 => Ok(Complex::new(n.data[0], 0.0)),
-            Some(Value::Num(_)) => Err(self.error(true)),
-            Some(Value::Byte(n)) if n.rank() == 0 => Ok(Complex::new(n.data[0] as f64, 0.0)),
-            Some(Value::Byte(_)) => Err(self.error(true)),
-            Some(Value::Complex(c)) if c.rank() == 0 => Ok(c.data[0]),
-            Some(Value::Complex(_)) => Err(self.error(true)),
-            _ => Err(self.error(false)),
-        }
-    }
-    pub(crate) fn complex_array(&self) -> Result<Array<Complex>, &'static str> {
-        match self.value() {
-            Some(Value::Num(n)) => Ok(n.convert_ref()),
-            Some(Value::Byte(n)) => Ok(n.convert_ref()),
-            Some(Value::Complex(c)) => Ok(c.clone()),
-            _ => Err(self.error(false)),
-        }
-    }
     pub(crate) fn value_for(&self, val: &Value) -> Option<&Value> {
         let fill = self.value()?;
         match (val, fill) {
             (Value::Num(_) | Value::Byte(_), Value::Num(_) | Value::Byte(_))
             | (Value::Char(_), Value::Char(_))
-            | (Value::Complex(_), Value::Complex(_))
             | (Value::Box(_), Value::Box(_)) => Some(fill),
             _ => None,
         }
@@ -133,7 +113,6 @@ impl<'a> Fill<'a> {
                 Some(Value::Num(_)) => ". A number fill is set, but is is not a scalar.",
                 Some(Value::Byte(_)) => ". A number fill is set, but is is not a scalar.",
                 Some(Value::Char(_)) => ". A character fill is set, but is is not a scalar.",
-                Some(Value::Complex(_)) => ". A complex fill is set, but is is not a scalar.",
                 Some(Value::Box(_)) => ". A box fill is set, but is is not a scalar.",
                 None => {
                     if (self.other_value_fill)(self.env).is_some() {
@@ -149,9 +128,6 @@ impl<'a> Fill<'a> {
                 Some(Value::Byte(_)) => ". A number fill is set, but the array is not numbers.",
                 Some(Value::Char(_)) => {
                     ". A character fill is set, but the array is not characters."
-                }
-                Some(Value::Complex(_)) => {
-                    ". A complex fill is set, but the array is not complex numbers."
                 }
                 Some(Value::Box(_)) => ". A box fill is set, but the array is not boxed values.",
                 None => {

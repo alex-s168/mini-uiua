@@ -11,8 +11,6 @@ use std::{
 };
 
 use ecow::EcoString;
-use serde::*;
-use serde_tuple::*;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
@@ -144,7 +142,7 @@ impl Error for LexError {}
 /// A location in a Uiua source file
 #[allow(missing_docs)]
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize_tuple, Deserialize_tuple,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
 pub struct Loc {
     pub line: u16,
@@ -171,8 +169,7 @@ impl Default for Loc {
 }
 
 /// A runtime span in a Uiua source file
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Span {
     /// A span that has a place in actual code
     Code(CodeSpan),
@@ -219,8 +216,7 @@ impl Span {
 }
 
 /// The source of code input into the interpreter
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(untagged, into = "InputSrcRep", from = "InputSrcRep")]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum InputSrc {
     /// Code from a file with a path
     File(Arc<Path>),
@@ -266,8 +262,6 @@ impl PartialEq<InputSrc> for PathBuf {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
 enum InputSrcRep {
     File(PathBuf),
     Str(usize),
@@ -334,7 +328,7 @@ impl IntoInputSrc for () {
 }
 
 /// A span in a Uiua source file
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize_tuple, Deserialize_tuple)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CodeSpan {
     /// The path of the file
     pub src: InputSrc,
@@ -519,7 +513,7 @@ impl CodeSpan {
 }
 
 /// A span wrapping a value
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Sp<T, S = CodeSpan> {
     /// The value
     pub value: T,

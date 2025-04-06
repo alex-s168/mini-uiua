@@ -9,7 +9,7 @@ use crate::{
     algorithm::{get_ops, loops::flip, multi_output, pervade::*},
     check::nodes_sig,
     cowslice::cowslice,
-    Array, ArrayValue, Complex, ImplPrimitive, Node, Ops, Primitive, Shape, SigNode, Uiua,
+    Array, ArrayValue, ImplPrimitive, Node, Ops, Primitive, Shape, SigNode, Uiua,
     UiuaResult, Value,
 };
 
@@ -51,11 +51,6 @@ pub(crate) fn reduce_impl(f: SigNode, depth: usize, env: &mut Uiua) -> UiuaResul
         (Some((prim, flipped)), Value::Num(nums)) => {
             if let Err(nums) = reduce_nums(prim, flipped, nums, depth, env) {
                 return generic_reduce(f, Value::Num(nums), depth, env);
-            }
-        }
-        (Some((prim, flipped)), Value::Complex(nums)) => {
-            if let Err(nums) = reduce_coms(prim, flipped, nums, depth, env) {
-                return generic_reduce(f, Value::Complex(nums), depth, env);
             }
         }
         (Some((prim, _flipped)), Value::Byte(bytes)) => {
@@ -298,7 +293,6 @@ macro_rules! reduce_math {
 }
 
 reduce_math!(reduce_nums, f64, num_num);
-reduce_math!(reduce_coms, Complex, com_x);
 
 fn fast_reduce_different<T, U>(
     arr: Array<T>,

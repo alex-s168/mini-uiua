@@ -5,12 +5,10 @@ use std::{
     ops::{Deref, DerefMut, RangeBounds},
 };
 
-use serde::*;
 use tinyvec::{ArrayVec, TinyVec};
 
 /// Uiua's array shape type
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Shape {
     dims: TinyVec<[usize; 3]>,
 }

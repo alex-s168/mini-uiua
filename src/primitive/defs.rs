@@ -18,8 +18,7 @@ macro_rules! primitive {
         )
     ),* $(,)?) => {
         /// A built-in function
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Sequence, Serialize, Deserialize)]
-        #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Sequence)]
         #[allow(rustdoc::broken_intra_doc_links)]
         pub enum Primitive {
             $(
@@ -27,7 +26,6 @@ macro_rules! primitive {
                 $variant,
             )*
             /// System function
-            #[serde(untagged)]
             Sys(SysOp)
         }
 
@@ -69,17 +67,6 @@ macro_rules! primitive {
                     $($($(Primitive::$variant => $outputs.into(),)?)?)*
                     Primitive::Sys(op) => Some(op.outputs()),
                     _ => Some(1)
-                }
-            }
-            /// Get the primitive's documentation
-            pub fn doc(&self) -> &'static PrimDoc {
-                match self {
-                    $(Primitive::$variant => {
-                        let doc_str = concat!($doc_rust, $($doc, "\n"),*);
-                        static DOC: OnceLock<PrimDoc> = OnceLock::new();
-                        DOC.get_or_init(|| PrimDoc::from_lines(doc_str))
-                    },)*
-                    Primitive::Sys(op) => op.doc(),
                 }
             }
             /// Whether the primitive is pure
@@ -477,22 +464,6 @@ primitive!(
     /// ex: °∠ π
     /// ex: °∠ ÷3π
     (2, Atan, DyadicPervasive, ("atangent", '∠')),
-    /// Make a complex number
-    ///
-    /// The first argument is the imaginary part, and the second argument is the real part.
-    /// ex: ℂ 3 5
-    /// ex: ℂ [0 1 2] [3 4 5]
-    /// [complex] is equivalent to `add``multiply``i`.
-    /// You can use [absolute value] to get the magnitude of the complex number.
-    /// ex: ⌵ ℂ3 4
-    /// You can use [sign] to normalize the complex number to a magnitude of 1.
-    /// ex: ± ℂ3 4
-    /// You can use [un][complex] to get the imaginary and real parts back out.
-    /// ex: [°ℂ] i
-    /// ex: [°ℂ] ×. ℂ3 4
-    /// A complex number [equals] a real one if the imaginary part is 0 and the real parts [match].
-    /// ex: = 5 ℂ0 5
-    (2, Complex, DyadicPervasive, ("complex", 'ℂ')),
     /// Get the number of rows in an array
     ///
     /// ex: ⧻5
@@ -2460,22 +2431,6 @@ primitive!(
     /// For non-determinism, [random] can be used as a seed.
     /// ex: ⌊×10 gen 3_4 ⚂
     (2, Gen, Misc, "gen"),
-    /// Match a regex pattern
-    ///
-    /// Returns a rank-2 array of [box]ed strings, with one string per matching group and one row per match
-    /// ex: regex "h([io])" "hihaho"
-    /// ex: regex "hi" "dog"
-    ///   : △.
-    /// ex: regex "[a-z]+" "hello world"
-    /// Escaped regex characters must be double-escaped.
-    /// ex: regex "\\d+" "123"
-    /// ex: P ← $"(\\d{_})"
-    ///   : regex $"_-_-_"P3P3P4 "123-456-7890"
-    /// Regex patterns with optional captures can be used with [fill].
-    /// ex: ⬚""regex "a(b)?" "a ab"
-    ///
-    /// Uiua uses the [Rust regex crate](https://docs.rs/regex/latest/regex/) internally.
-    (2, Regex, Misc, "regex"),
     /// Convert a string to UTF-8 bytes
     ///
     /// ex: utf₈ "hello!"
@@ -2830,30 +2785,6 @@ primitive!(
     /// At the moment, this is only useful for debugging.
     /// While theoretically, it could be used in a macro to choose a branch of a [switch] appropriate for the function, this is not yet possible because of the way that macros and signature checking work.
     (0(2)[1], Sig, Comptime, "signature"),
-    /// Run the Fast Fourier Transform on an array
-    ///
-    /// The Fast Fourier Transform (FFT) is an optimized algorithm for computing the Discrete Fourier Transform (DFT). The DFT is a transformation that converts a signal from the time domain to the frequency domain.
-    ///
-    /// The input array must be either real or complex.
-    /// The result will always be complex.
-    /// Multi-dimensional arrays are supported. Each rank-1 row is treated as a separate array.
-    ///
-    /// In this example, we generate some data that is the sum of some [sine] waves.
-    /// We then run [fft] on it and create a plot of the resulting frequency bins.
-    /// ex: # Experimental!
-    ///   : ÷⟜⇡200             # 200 numbers between 0 and 1
-    ///   : /+∿⊞×[100 200 400] # Add some frequencies
-    ///   : ⌵ fft              # Run the FFT
-    ///   : ↘⌊÷2⧻.             # Drop the top half
-    ///   : ⬚0≡▽:1 ×15         # Render
-    ///
-    /// You can use [un][fft] to calculate the inverse FFT.
-    /// In this example, we generate a list of `1`s representing frequency bins and run `un``fft` on it to get time-domain data. We can listen to the result as audio.
-    /// ex: # Experimental!
-    ///   : [220 277 330 440] # Frequencies
-    ///   : ⬚0↙ &asr °⊚       # Put 1 in buffer for each frequency
-    ///   : ◌°ℂ °fft          # Run inverse FFT and get the real part
-    (1, Fft, Misc, "fft"),
     /// Find shortest paths in a graph
     ((2)[3], Astar, Misc, "astar"),
     /// Find the shortest path between two things
@@ -2959,110 +2890,6 @@ primitive!(
     ///
     /// See also: [derivative]
     ([1], Integral, Misc, ("integral", '∫')),
-    /// Encode an array into a JSON string
-    ///
-    /// ex: json [1 2 3]
-    /// ex: json {"some" "words"}
-    /// ex: json map {"hey" "there" "buddy"} {1 2 [3 4 5]}
-    /// You can use [un][json] to decode a JSON string back into an array.
-    /// ex: °json "[4,5,6]"
-    /// ex: °json $ ["what's","the","plan"]
-    /// ex: °json $ {"foo": "bar", "baz": [1, 2, 3]}
-    ///
-    /// While the number literals `0` and `1` are converted to their number equivalents in JSON, the shadowable constants `True` and `False` are converted to JSON `true` and `false`.
-    /// ex: json {0 1 2 3 True False}
-    ///
-    /// [un][json] will never form multidimensional arrays, as the shape data is lost.
-    /// ex: °json json [1_2_3 4_5_6]
-    ///
-    /// While [json] always produces ECMA-compliant JSON, [un][json] can parse [JSON5](https://json5.org/).
-    /// This means that you can use single quotes, unquoted keys, trailing commas, and comments.
-    /// ex: °json $ {foo: 'bar', /* cool */ baz: [1, 2, 3,],}
-    ///
-    /// Note that `NaN` and [infinity] convert to JSON `null`, and JSON `null` converts to `NaN`.
-    /// This means that [infinity] is converted to `NaN` in a round-trip.
-    /// ex: json [1 ¯5 NaN ∞]
-    /// ex: °json "[1,null,-3,null]"
-    (1, Json, Encoding, "json"),
-    /// Encode an array into a CSV string
-    ///
-    /// The input array must be at most rank-`2`.
-    /// ex: csv [1 2 3]
-    /// ex: csv ↯3_4⇡12
-    /// ex: csv [{"Foo" "Bar"} [1 2] [3 4] [5 6]]
-    /// You can use [un][csv] to decode a CSV string back into an array.
-    /// ex: °csv "#,Count\n1,5\n2,21\n3,8\n"
-    /// By default, rows of mismatched length are padded with empty strings.
-    /// ex: °csv "1,2,3\n4\n5,6"
-    /// This can be changed with [fill].
-    /// ex: ⬚"x"°csv "1,2,3\n4\n5,6"
-    /// The default delimiter is (of course) a comma. However, [fill] can be used to change it.
-    /// ex: °⬚@;csv "1;2;3\n4\n5,6;7"
-    /// [fill] outside the [un] pads rows of different lengths. [fill] inside the [un] chooses the delimiter.
-    /// ex: ⬚"x"°⬚@;csv "1;2;3\n4\n5,6;7"
-    /// The decoding result will always be a rank-`2` array of boxed strings.
-    /// You can use `each``try``parse``gap``identity` to convert the strings that represent numbers.
-    /// ex: ∵⍣⋕∘ °csv "#,Count\n1,5\n2,21\n3,8\n"
-    /// If you know there are headers, you can use [un][join] to separate them.
-    /// ex: ⊙⋕°⊂ °csv "#,Count\n1,5\n2,21\n3,8\n"
-    /// You can easily create a [map] with the headers as keys.
-    /// ex: map⊙(⍉⋕)°⊂ °csv "#,Count\n1,5\n2,21\n3,8\n"
-    (1, Csv, Encoding, "csv"),
-    /// Encode an array into XLSX bytes
-    ///
-    /// XLSX is a spreadsheet format that can be edited in programs like Microsoft Excel, Google Sheets, and LibreOffice Calc.
-    /// Spreadsheets are just arrays, so array languages like Uiua are a natural fit for working with them.
-    ///
-    /// The input value must be a sheet array or a [map] array with sheet names as keys and sheet arrays as values.
-    /// Sheet arrays may be at most rank `2`.
-    /// XLSX is a binary format, so the output is a byte array.
-    ///
-    /// You can use [un][xlsx] to decode an XLSX byte array back into a sheet map.
-    /// In the resulting sheet map, each sheet will be a boxed rank-`2` array of boxed values.
-    ///
-    /// While it is not useful to display the output bytes here, we can see how the result of decoding works:
-    /// ex: °xlsx xlsx . ↯3_6⇡18
-    (1, Xlsx, Encoding, "xlsx"),
-    /// Encode an array into a compact binary representation
-    ///
-    /// This is useful for saving arrays to files.
-    /// Being `# Experimental`, the format is currently subject to backward-incompatible changes.
-    /// Any array can be encoded unless it:
-    /// - contains an I/O handle or FFI pointer
-    /// - has a rank `greater than``255`
-    /// - has a very high nesting via [box] or [map]
-    ///
-    /// ex: # Experimental!
-    ///   : binary [1 2 3 4]
-    /// ex: # Experimental!
-    ///   : binary {"Hello" "World!"}
-    /// ex: # Experimental!
-    ///   : binary {1 η_π_τ 4_5_6 "wow!"}
-    ///
-    /// You can use [un][binary] to decode a binary byte array into its original value.
-    /// ex: # Experimental!
-    ///   : °binary . binary . map [1 2 3] [4 5 6]
-    /// ex: # Experimental!
-    ///   : °binary . binary . {1 η_π_τ 4_5_6 "wow!"}
-    ///
-    /// [binary] adds at *least* 6 bytes of overhead to the encoded array. This includes at least 6 bytes for every box element.
-    /// The overhead is type, shape, and metadata information.
-    /// ex: # Experimental!
-    ///   : binary [1 2 3 4 5]
-    ///   : binary.
-    ///   : binary.
-    ///
-    /// For number arrays, the smallest type that can represent all the numbers is used so that the encoded array is as small as possible.
-    /// ex: # Experimental!
-    ///   : ÷∩⧻⟜binary ⇡256    # u8s
-    ///   : ÷∩⧻⟜binary ⇡257    # u16s
-    ///   : ÷∩⧻⟜binary ÷⟜⇡256  # f32s
-    ///   : ÷∩⧻⟜binary ×π ⇡256 # f64s
-    ///
-    /// Complex arrays are always encoded as f64 pairs.
-    /// ex: # Experimental!
-    ///   : ÷∩⧻⟜binary ℂ0 ⇡256
-    (1, Binary, Encoding, "binary"),
     /// Convert a value to its code representation
     ///
     /// ex: repr π
@@ -3076,93 +2903,6 @@ primitive!(
     ///   : ⍜⊜□⍚(⊂@,)∊" \n". repr # add commas
     ///   : &p ⍜▽∵⋅@-=@¯.        # replace negate glyphs with minus signs
     (1, Repr, Misc, "repr"),
-    /// Encode an image into a byte array with the specified format
-    ///
-    /// The first argument is the format, and the second is the image.
-    ///
-    /// The image must be a rank 2 or 3 numeric array.
-    /// Axes 0 and 1 contain the rows and columns of the image.
-    /// A rank 2 array is a grayscale image.
-    /// A rank 3 array is an RGB image.
-    /// In a rank 3 image array, the last axis must be length 1, 2, 3, or 4.
-    /// A length 1 last axis is a grayscale image.
-    /// A length 2 last axis is a grayscale image with an alpha channel.
-    /// A length 3 last axis is an RGB image.
-    /// A length 4 last axis is an RGB image with an alpha channel.
-    ///
-    /// You can decode a byte array into an image with [un][img].
-    ///
-    /// Supported formats are `jpg`, `png`, `bmp`, `gif`, `ico`, and `qoi`.
-    ///
-    /// See also: [&ims]
-    (2, ImageEncode, Encoding, "img"),
-    /// Encode a gif into a byte array
-    ///
-    /// The first argument is a framerate in seconds.
-    /// The second argument is the gif data and must be a rank 3 or 4 numeric array.
-    /// The rows of the array are the frames of the gif, and their format must conform to that of [img].
-    ///
-    /// You can decode a byte array into a gif with [un][gif].
-    ///
-    /// See also: [&gifs]
-    (2, GifEncode, Encoding, "gif"),
-    /// Encode audio into a byte array
-    ///
-    /// The first argument is the format, the second is the audio sample rate, and the third is the audio samples.
-    ///
-    /// The sample rate must be a positive integer.
-    /// The audio samples must be a rank 1 or 2 numeric array.
-    /// A rank 1 array is a list of mono audio samples.
-    /// For a rank 2 array, each row is a sample with multiple channels.
-    /// The samples must be between -1 and 1.
-    ///
-    /// You can decode a byte array into audio with [un][audio].
-    /// This returns the audio format as a string, the audio sample rate, and an array representing the audio samples.
-    ///
-    /// Currently, only the `wav` format is supported.
-    ///
-    /// This simple example will load an audio file, halve its sample rate, and re-encode it.
-    /// ex: ⍜(°audio &frab "test.wav")⊙⊓(⌊÷2|▽0.5)
-    ///
-    /// See also: [&ap]
-    (3, AudioEncode, Encoding, "audio"),
-    /// Render text into an image array
-    ///
-    /// In the most basic usage, the first argument is a font size and the second argument is the text to render.
-    /// The result is a rank-2 array of pixel values.
-    /// In this example, we map the pixel values to ASCII characters to visualize the result.
-    /// ex: # Experimental!
-    ///   : layout 12 "Hello!"
-    ///   : ⊏:" @" ⁅ +0.1
-    /// Multi-line text is supported.
-    /// ex: # Experimental!
-    ///   : layout 30 "Hello,\nWorld!"
-    /// The text to be rendered can be a character array or box array where all leaf nodes are strings.
-    /// The top-level rows are treated as lines and will be separated by newlines.
-    /// The bottom-level rows are treated as words and will be separated by spaces.
-    /// ex: # Experimental!
-    ///   : {{"Words" "can" "be" "on"}
-    ///   :  {"multiple" "lines"}}
-    ///   : layout 30
-    /// ex: # Experimental!
-    ///   : layout 15 ⬚""↯∞_12 ⊜□⊸≠@  Lorem
-    ///
-    /// Additionally, the first argument can be a list of options.
-    /// The first scalar option is the font size (default 30)
-    /// The second scalar option is the line height (default 1)
-    /// The first array of 2 numbers is the canvas size. Use `∞` to use the smallest possible size.
-    /// The first array of 3 or 4 numbers is the color. If set, the background defaults to transparent.
-    /// ex: # Experimental!
-    ///   : $ Uiua is a
-    ///   : $ stack-based
-    ///   : $ array-oriented
-    ///   : $ programming
-    ///   : $ language
-    ///   : layout {30 1.5 300_350 0.5_0.5_1}
-    /// [fill] sets the background color.
-    /// ex: # Experimental!
-    ///   : ⬚[1 0 0] layout {100 0_1_0} "Green on Red!"
-    (2, Layout, Encoding, "layout", Impure),
 );
 
 macro_rules! impl_primitive {
@@ -3178,8 +2918,7 @@ macro_rules! impl_primitive {
     ),* $(,)?) => {
         /// Primitives that exist as an implementation detail
         #[doc(hidden)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-        #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub enum ImplPrimitive {
             $(
                 $(#[$attr])*
@@ -3269,7 +3008,6 @@ impl_primitive!(
     (1, UnUtf16),
     (1, UnGraphemes),
     (1(2), UnAtan),
-    (1(2), UnComplex),
     (1, UnParse),
     (1, UnFix),
     (1, UnShape),
@@ -3291,21 +3029,11 @@ impl_primitive!(
     (3(2), UnJoinShape2End),
     (1(2), UnKeep),
     (1, UnSort, Impure),
-    (1, UnJson),
-    (1, UnBinary),
-    (1, UnCsv),
-    (1, UnXlsx),
-    (1, UnFft),
     (1, UnDatetime),
     (2, ProgressiveIndexOf),
     (2(0), MatchPattern),
     (2(1), MatchLe),
     (2(1), MatchGe),
-    (1(2), ImageDecode),
-    (1(2), GifDecode),
-    (1(3), AudioDecode),
-    (0(1), UnRawMode, Impure),
-    (1(0), UnClip, Mutating),
     // Unders
     (1, UndoFix),
     (2, UndoUnBits),

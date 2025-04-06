@@ -7,10 +7,9 @@ use std::{
 
 use bytemuck::must_cast;
 use ecow::EcoVec;
-use serde::*;
 
 use crate::{
-    algorithm::ArrayCmpSlice, val_as_arr, Array, ArrayValue, Boxed, Complex, FormatShape, Uiua,
+    algorithm::ArrayCmpSlice, val_as_arr, Array, ArrayValue, Boxed, FormatShape, Uiua,
     UiuaResult, Value,
 };
 
@@ -336,7 +335,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MapKeys {
     pub(crate) keys: Value,
     indices: Vec<usize>,
@@ -361,7 +360,6 @@ impl MapKeys {
         }
         match &mut self.keys {
             Value::Num(a) => Self::grow_impl(a, &mut self.indices, new_capacity),
-            Value::Complex(a) => Self::grow_impl(a, &mut self.indices, new_capacity),
             Value::Char(a) => Self::grow_impl(a, &mut self.indices, new_capacity),
             Value::Box(a) => Self::grow_impl(a, &mut self.indices, new_capacity),
             Value::Byte(_) => unreachable!(),
@@ -495,7 +493,7 @@ impl MapKeys {
                 }
             }
         }
-        let replaced = do_insert!(Num, Complex, Char, Box);
+        let replaced = do_insert!(Num, Char, Box);
         self.grow();
         Ok(replaced)
     }
@@ -578,7 +576,7 @@ impl MapKeys {
                 }
             }
         }
-        do_remove!(Num, Complex, Char, Box)
+        do_remove!(Num, Char, Box)
     }
     /// Get the keys in the same order as map values
     pub fn normalized(mut self) -> Value {
@@ -650,7 +648,6 @@ impl MapKeys {
         let dropped = &present_indices[..n];
         match &mut self.keys {
             Value::Num(keys) => set_tombstones(keys, dropped),
-            Value::Complex(keys) => set_tombstones(keys, dropped),
             Value::Char(keys) => set_tombstones(keys, dropped),
             Value::Box(keys) => set_tombstones(keys, dropped),
             Value::Byte(keys) => {
@@ -670,7 +667,6 @@ impl MapKeys {
         let not_taken = &present_indices[n..];
         match &mut self.keys {
             Value::Num(keys) => set_tombstones(keys, not_taken),
-            Value::Complex(keys) => set_tombstones(keys, not_taken),
             Value::Char(keys) => set_tombstones(keys, not_taken),
             Value::Box(keys) => set_tombstones(keys, not_taken),
             Value::Byte(keys) => {
@@ -826,15 +822,6 @@ fn coerce_values(
                 FormatShape(&arr.shape()[1..])
             ))
         }
-        (Value::Complex(arr), Value::Complex(item))
-            if arr.rank() > 0 && arr.shape[1..] != item.shape =>
-        {
-            Err(format!(
-                "Cannot {action1} shape {} {action2} shape {} {action3}",
-                item.shape(),
-                FormatShape(&arr.shape()[1..])
-            ))
-        }
         (Value::Box(arr), Value::Box(item)) if arr.rank() > 0 && arr.shape[1..] != item.shape => {
             Err(format!(
                 "Cannot {action1} shape {} {action2} shape {} {action3}",
@@ -843,7 +830,6 @@ fn coerce_values(
             ))
         }
         (val @ Value::Num(_), owned @ Value::Num(_))
-        | (val @ Value::Complex(_), owned @ Value::Complex(_))
         | (val @ Value::Char(_), owned @ Value::Char(_))
         | (val @ Value::Box(_), owned @ Value::Box(_)) => {
             if val.rank() > 0 && &val.shape()[1..] != owned.shape() {
@@ -858,9 +844,6 @@ fn coerce_values(
         }
         (Value::Box(_), Value::Num(num)) => Ok(Value::Box(Array::from(Boxed(Value::from(num))))),
         (Value::Box(_), Value::Char(ch)) => Ok(Value::Box(Array::from(Boxed(Value::from(ch))))),
-        (Value::Box(_), Value::Complex(num)) => {
-            Ok(Value::Box(Array::from(Boxed(Value::from(num)))))
-        }
         (m, owned) => Err(format!(
             "Cannot {action1} {} {action2} {} {action3}",
             owned.type_name(),
@@ -894,21 +877,6 @@ impl MapItem for f64 {
     }
     fn is_any_tombstone(&self) -> bool {
         self.to_bits() == TOMBSTONE_NAN.to_bits()
-    }
-}
-
-impl MapItem for Complex {
-    fn empty_cell() -> Self {
-        Complex::new(EMPTY_NAN, 0.0)
-    }
-    fn tombstone_cell() -> Self {
-        Complex::new(TOMBSTONE_NAN, 0.0)
-    }
-    fn is_any_empty_cell(&self) -> bool {
-        self.re.to_bits() == EMPTY_NAN.to_bits()
-    }
-    fn is_any_tombstone(&self) -> bool {
-        self.re.to_bits() == TOMBSTONE_NAN.to_bits()
     }
 }
 
@@ -953,7 +921,6 @@ impl MapItem for Value {
         match self {
             Value::Num(num) => num.data.iter().any(|v| v.is_any_empty_cell()),
             Value::Byte(_) => false,
-            Value::Complex(num) => num.data.iter().any(|v| v.is_any_empty_cell()),
             Value::Char(num) => num.data.iter().any(|v| v.is_any_empty_cell()),
             Value::Box(num) => num.data.iter().any(|v| v.is_any_empty_cell()),
         }
@@ -962,7 +929,6 @@ impl MapItem for Value {
         match self {
             Value::Num(num) => num.data.iter().any(|v| v.is_any_tombstone()),
             Value::Byte(_) => false,
-            Value::Complex(num) => num.data.iter().any(|v| v.is_any_tombstone()),
             Value::Char(num) => num.data.iter().any(|v| v.is_any_tombstone()),
             Value::Box(num) => num.data.iter().any(|v| v.is_any_tombstone()),
         }
@@ -971,7 +937,6 @@ impl MapItem for Value {
         match self {
             Value::Num(num) => num.data.iter().all(|v| v.is_any_empty_cell()),
             Value::Byte(_) => false,
-            Value::Complex(num) => num.data.iter().all(|v| v.is_any_empty_cell()),
             Value::Char(num) => num.data.iter().all(|v| v.is_any_empty_cell()),
             Value::Box(num) => num.data.iter().all(|v| v.is_any_empty_cell()),
         }
@@ -980,7 +945,6 @@ impl MapItem for Value {
         match self {
             Value::Num(num) => num.data.iter().all(|v| v.is_any_tombstone()),
             Value::Byte(_) => false,
-            Value::Complex(num) => num.data.iter().all(|v| v.is_any_tombstone()),
             Value::Char(num) => num.data.iter().all(|v| v.is_any_tombstone()),
             Value::Box(num) => num.data.iter().all(|v| v.is_any_tombstone()),
         }

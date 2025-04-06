@@ -109,7 +109,6 @@ impl Value {
         Ok(match from {
             Value::Num(a) => Value::Num(a.pick(index_shape, &index_data, env)?),
             Value::Byte(a) => Value::Byte(a.pick(index_shape, &index_data, env)?),
-            Value::Complex(a) => Value::Complex(a.pick(index_shape, &index_data, env)?),
             Value::Char(a) => Value::Char(a.pick(index_shape, &index_data, env)?),
             Value::Box(a) => Value::Box(a.pick(index_shape, &index_data, env)?),
         })
@@ -1086,9 +1085,6 @@ impl Value {
         Ok(match from {
             Value::Num(a) => Value::Num(a.anti_select(indices_shape, &indices_data, env)?),
             Value::Byte(a) => Value::Byte(a.anti_select(indices_shape, &indices_data, env)?),
-            Value::Complex(a) => {
-                Value::Complex(a.anti_select(indices_shape, &indices_data, env)?)
-            }
             Value::Char(a) => Value::Char(a.anti_select(indices_shape, &indices_data, env)?),
             Value::Box(a) => Value::Box(a.anti_select(indices_shape, &indices_data, env)?),
         })

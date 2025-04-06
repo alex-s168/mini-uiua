@@ -9,26 +9,17 @@ use std::{
 use bitflags::bitflags;
 use bytemuck::must_cast;
 use ecow::{EcoString, EcoVec};
-use serde::{de::DeserializeOwned, *};
 
 use crate::{
     algorithm::map::{MapKeys, EMPTY_NAN, TOMBSTONE_NAN},
     cowslice::{cowslice, CowSlice},
     fill::Fill,
     grid_fmt::{ElemAlign, GridFmt},
-    Boxed, Complex, ExactDoubleIterator, HandleKind, Shape, Value,
+    Boxed, ExactDoubleIterator, HandleKind, Shape, Value,
 };
 
 /// Uiua's array type
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(
-    from = "ArrayRep<T>",
-    into = "ArrayRep<T>",
-    bound(
-        serialize = "T: ArrayValueSer + Serialize",
-        deserialize = "T: ArrayValueSer + Deserialize<'de>"
-    )
-)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct Array<T> {
     pub(crate) shape: Shape,
@@ -37,22 +28,17 @@ pub struct Array<T> {
 }
 
 /// Non-shape metadata for an array
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ArrayMeta {
     /// The label
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<EcoString>,
     /// Flags for the array
-    #[serde(default, skip_serializing_if = "ArrayFlags::is_empty")]
     pub flags: ArrayFlags,
     /// The keys of a map array
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map_keys: Option<MapKeys>,
     /// The pointer value for FFI
-    #[serde(skip)]
     pub pointer: Option<MetaPtr>,
     /// The kind of system handle
-    #[serde(skip)]
     pub handle_kind: Option<HandleKind>,
 }
 
@@ -131,7 +117,7 @@ impl Eq for MetaPtr {}
 
 bitflags! {
     /// Flags for an array
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
     pub struct ArrayFlags: u8 {
         /// No flags
         const NONE = 0;
@@ -1191,88 +1177,6 @@ impl ArrayValue for Boxed {
     }
 }
 
-impl ArrayValue for Complex {
-    const NAME: &'static str = "complex";
-    const SYMBOL: char = 'ℂ';
-    const TYPE_ID: u8 = 3;
-    fn get_scalar_fill(fill: &Fill) -> Result<Self, &'static str> {
-        fill.complex_scalar()
-    }
-    fn get_array_fill(fill: &Fill) -> Result<Array<Self>, &'static str> {
-        fill.complex_array()
-    }
-    fn array_hash<H: Hasher>(&self, hasher: &mut H) {
-        for n in [self.re, self.im] {
-            n.array_hash(hasher);
-        }
-    }
-    fn proxy() -> Self {
-        Complex::new(0.0, 0.0)
-    }
-    fn empty_list_inner() -> &'static str {
-        "ℂ"
-    }
-    fn summarize(elems: &[Self]) -> String {
-        if elems.is_empty() {
-            return String::new();
-        }
-        let (mut re_min, mut im_min) = (f64::INFINITY, f64::INFINITY);
-        let (mut re_max, mut im_max) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
-        let (mut re_mean, mut im_mean) = (0.0, 0.0);
-        let (mut re_nan_count, mut im_nan_count) = (0, 0);
-        let (mut re_inf_balance, mut im_inf_balance) = (0i64, 0i64);
-        let (mut re_i, mut im_i) = (0, 0);
-        for &elem in elems {
-            for ((elem, i), (min, max, mean), (nan_count, inf_balance)) in [
-                (
-                    (elem.re, &mut re_i),
-                    (&mut re_min, &mut re_max, &mut re_mean),
-                    (&mut re_nan_count, &mut re_inf_balance),
-                ),
-                (
-                    (elem.im, &mut im_i),
-                    (&mut im_min, &mut im_max, &mut im_mean),
-                    (&mut im_nan_count, &mut im_inf_balance),
-                ),
-            ] {
-                if elem.is_nan() {
-                    *nan_count += 1;
-                } else if elem.is_infinite() {
-                    *inf_balance += elem.is_sign_positive() as i64;
-                    *min = min.min(elem);
-                    *max = max.max(elem);
-                } else {
-                    *min = min.min(elem);
-                    *max = max.max(elem);
-                    *mean += (elem - *mean) / (*i + 1) as f64;
-                    *i += 1;
-                }
-            }
-        }
-        for (inf_balance, mean) in [
-            (re_inf_balance, &mut re_mean),
-            (im_inf_balance, &mut im_mean),
-        ] {
-            if inf_balance != 0 {
-                *mean = inf_balance.signum() as f64 * f64::INFINITY;
-            }
-        }
-        if re_min == re_max && im_min == im_max {
-            format!("all {}", Complex::new(re_min, im_min).grid_string(false))
-        } else {
-            let min = Complex::new(round_sig_dec(re_min, 3), round_sig_dec(im_min, 3));
-            let max = Complex::new(round_sig_dec(re_max, 3), round_sig_dec(im_max, 3));
-            let mean = Complex::new(round_sig_dec(re_mean, 3), round_sig_dec(im_mean, 3));
-            format!(
-                "{} - {} μ{}",
-                min.grid_string(false),
-                max.grid_string(false),
-                mean.grid_string(false)
-            )
-        }
-    }
-}
-
 /// Trait for [`ArrayValue`]s that are real numbers
 pub trait RealArrayValue: ArrayValue + Copy {
     /// Whether the value is an integer
@@ -1325,14 +1229,6 @@ impl ArrayCmp for f64 {
 impl ArrayCmp for u8 {
     fn array_cmp(&self, other: &Self) -> Ordering {
         self.cmp(other)
-    }
-}
-
-impl ArrayCmp for Complex {
-    fn array_cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or_else(|| {
-            (self.re.is_nan(), self.im.is_nan()).cmp(&(other.re.is_nan(), other.im.is_nan()))
-        })
     }
 }
 
@@ -1390,12 +1286,7 @@ impl<T: fmt::Display> fmt::Display for FormatShape<'_, T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-#[serde(bound(
-    serialize = "T: ArrayValueSer + Serialize",
-    deserialize = "T: ArrayValueSer + Deserialize<'de>"
-))]
+#[derive(Debug, Clone)]
 enum ArrayRep<T: ArrayValueSer> {
     List(T::Collection),
     Scalar(T::Scalar),
@@ -1461,8 +1352,8 @@ impl<T: ArrayValueSer> From<Array<T>> for ArrayRep<T> {
 }
 
 trait ArrayValueSer: ArrayValue + fmt::Debug {
-    type Scalar: Serialize + DeserializeOwned + fmt::Debug + From<Self> + Into<Self>;
-    type Collection: Serialize + DeserializeOwned + fmt::Debug;
+    type Scalar: fmt::Debug + From<Self> + Into<Self>;
+    type Collection: fmt::Debug;
     fn make_collection(data: CowSlice<Self>) -> Self::Collection;
     fn make_data(collection: Self::Collection) -> CowSlice<Self>;
     /// Do not use the [`ArrayRep::Scalar`] variant
@@ -1482,11 +1373,9 @@ impl ArrayValueSer for u8 {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 enum BoxCollection {
-    #[serde(rename = "empty_boxes")]
     Empty([Boxed; 0]),
-    #[serde(untagged)]
     List(CowSlice<Boxed>),
 }
 
@@ -1505,35 +1394,6 @@ impl ArrayValueSer for Boxed {
             BoxCollection::Empty(_) => CowSlice::new(),
             BoxCollection::List(data) => data,
         }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-enum ComplexCollection {
-    #[serde(rename = "empty_complex")]
-    Empty([Complex; 0]),
-    #[serde(untagged)]
-    List(CowSlice<Complex>),
-}
-
-impl ArrayValueSer for Complex {
-    type Scalar = Complex;
-    type Collection = ComplexCollection;
-    fn make_collection(data: CowSlice<Self>) -> Self::Collection {
-        if data.is_empty() {
-            ComplexCollection::Empty([])
-        } else {
-            ComplexCollection::List(data)
-        }
-    }
-    fn make_data(collection: Self::Collection) -> CowSlice<Self> {
-        match collection {
-            ComplexCollection::Empty(_) => CowSlice::new(),
-            ComplexCollection::List(data) => data,
-        }
-    }
-    fn no_scalar() -> bool {
-        true
     }
 }
 
@@ -1562,19 +1422,13 @@ impl ArrayValueSer for char {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
 enum F64Rep {
-    #[serde(rename = "NaN")]
     NaN,
-    #[serde(rename = "empty")]
     MapEmpty,
-    #[serde(rename = "tomb")]
     MapTombstone,
-    #[serde(rename = "∞")]
     Infinity,
-    #[serde(rename = "-∞")]
     NegInfinity,
-    #[serde(untagged)]
     Num(f64),
 }
 

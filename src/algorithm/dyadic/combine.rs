@@ -7,7 +7,7 @@ use ecow::EcoVec;
 use crate::{
     algorithm::{max_shape, validate_size_impl, validate_size_of, FillContext, Indexable},
     cowslice::cowslice,
-    val_as_arr, Array, ArrayValue, Boxed, Complex, FormatShape, Primitive, Shape, Uiua, UiuaResult,
+    val_as_arr, Array, ArrayValue, Boxed, FormatShape, Primitive, Shape, Uiua, UiuaResult,
     Value,
 };
 
@@ -113,14 +113,9 @@ impl Value {
         Ok(match (self, other) {
             (Value::Num(a), Value::Num(b)) => a.join_impl(b, ext, ctx)?.into(),
             (Value::Byte(a), Value::Byte(b)) => a.join_impl(b, ext, ctx)?.into(),
-            (Value::Complex(a), Value::Complex(b)) => a.join_impl(b, ext, ctx)?.into(),
             (Value::Char(a), Value::Char(b)) => a.join_impl(b, ext, ctx)?.into(),
             (Value::Byte(a), Value::Num(b)) => a.convert().join_impl(b, ext, ctx)?.into(),
             (Value::Num(a), Value::Byte(b)) => a.join_impl(b.convert(), ext, ctx)?.into(),
-            (Value::Complex(a), Value::Num(b)) => a.join_impl(b.convert(), ext, ctx)?.into(),
-            (Value::Num(a), Value::Complex(b)) => a.convert().join_impl(b, ext, ctx)?.into(),
-            (Value::Complex(a), Value::Byte(b)) => a.join_impl(b.convert(), ext, ctx)?.into(),
-            (Value::Byte(a), Value::Complex(b)) => a.convert().join_impl(b, ext, ctx)?.into(),
             (a, b) => a.bin_coerce_to_boxes(
                 b,
                 ctx,
@@ -140,7 +135,6 @@ impl Value {
         match (&mut *self, other) {
             (Value::Num(a), Value::Num(b)) => a.append(b, ext, ctx)?,
             (Value::Byte(a), Value::Byte(b)) => a.append(b, ext, ctx)?,
-            (Value::Complex(a), Value::Complex(b)) => a.append(b, ext, ctx)?,
             (Value::Char(a), Value::Char(b)) => a.append(b, ext, ctx)?,
             (Value::Byte(a), Value::Num(b)) => {
                 let mut a = a.convert_ref();
@@ -148,18 +142,6 @@ impl Value {
                 *self = a.into();
             }
             (Value::Num(a), Value::Byte(b)) => a.append(b.convert(), ext, ctx)?,
-            (Value::Complex(a), Value::Num(b)) => a.append(b.convert(), ext, ctx)?,
-            (Value::Num(a), Value::Complex(b)) => {
-                let mut a = a.convert_ref();
-                a.append(b, ext, ctx)?;
-                *self = a.into();
-            }
-            (Value::Complex(a), Value::Byte(b)) => a.append(b.convert(), ext, ctx)?,
-            (Value::Byte(a), Value::Complex(b)) => {
-                let mut a = a.convert_ref();
-                a.append(b, ext, ctx)?;
-                *self = a.into();
-            }
             (a, b) => a.bin_coerce_to_boxes_mut(
                 b,
                 ctx,
@@ -685,23 +667,10 @@ impl Value {
         match (&mut *self, other) {
             (Value::Num(a), Value::Num(b)) => a.couple_impl(b, allow_ext, ctx)?,
             (Value::Byte(a), Value::Byte(b)) => a.couple_impl(b, allow_ext, ctx)?,
-            (Value::Complex(a), Value::Complex(b)) => a.couple_impl(b, allow_ext, ctx)?,
             (Value::Char(a), Value::Char(b)) => a.couple_impl(b, allow_ext, ctx)?,
             (Value::Box(a), Value::Box(b)) => a.couple_impl(b, allow_ext, ctx)?,
             (Value::Num(a), Value::Byte(b)) => a.couple_impl(b.convert(), allow_ext, ctx)?,
             (Value::Byte(a), Value::Num(b)) => {
-                let mut a = a.convert_ref();
-                a.couple_impl(b, allow_ext, ctx)?;
-                *self = a.into();
-            }
-            (Value::Complex(a), Value::Num(b)) => a.couple_impl(b.convert(), allow_ext, ctx)?,
-            (Value::Num(a), Value::Complex(b)) => {
-                let mut a = a.convert_ref();
-                a.couple_impl(b, allow_ext, ctx)?;
-                *self = a.into();
-            }
-            (Value::Complex(a), Value::Byte(b)) => a.couple_impl(b.convert(), allow_ext, ctx)?,
-            (Value::Byte(a), Value::Complex(b)) => {
                 let mut a = a.convert_ref();
                 a.couple_impl(b, allow_ext, ctx)?;
                 *self = a.into();
@@ -897,11 +866,9 @@ impl Value {
         let mut row_values;
         let mut value = match &values[0] {
             Value::Num(_) => {
-                let mut has_complex = false;
                 let mut box_rank = None;
                 for b in &values[1..] {
                     match b {
-                        Value::Complex(_) => has_complex = true,
                         Value::Box(arr) => box_rank = box_rank.max(Some(arr.rank())),
                         Value::Char(_) => {
                             return Err(ctx.error("Cannot combine number and character arrays"))
@@ -916,8 +883,6 @@ impl Value {
                 };
                 if let Some(box_rank) = box_rank {
                     Value::Box(arr.box_depth(box_rank))
-                } else if has_complex {
-                    Value::Complex(arr.convert())
                 } else {
                     Value::Num(arr)
                 }
@@ -929,7 +894,6 @@ impl Value {
                 for b in &values[1..] {
                     match b {
                         Value::Num(_) => has_num = true,
-                        Value::Complex(_) => has_complex = true,
                         Value::Box(arr) => box_rank = box_rank.max(Some(arr.rank())),
                         Value::Char(_) => {
                             return Err(ctx.error("Cannot combine number and character arrays"))
@@ -944,34 +908,10 @@ impl Value {
                 };
                 if let Some(box_rank) = box_rank {
                     Value::Box(arr.box_depth(box_rank))
-                } else if has_complex {
-                    Value::Complex(arr.convert())
                 } else if has_num {
                     Value::Num(arr.convert())
                 } else {
                     Value::Byte(arr)
-                }
-            }
-            Value::Complex(_) => {
-                let mut box_rank = None;
-                for b in &values[1..] {
-                    match b {
-                        Value::Box(arr) => box_rank = box_rank.max(Some(arr.rank())),
-                        Value::Char(_) => {
-                            return Err(ctx.error("Cannot combine complex and character arrays"))
-                        }
-                        _ => {}
-                    }
-                }
-                row_values = values.into_iter();
-                let arr = match row_values.next().unwrap() {
-                    Value::Complex(arr) => arr,
-                    _ => unreachable!(),
-                };
-                if let Some(box_rank) = box_rank {
-                    Value::Box(arr.box_depth(box_rank))
-                } else {
-                    Value::Complex(arr)
                 }
             }
             Value::Char(_) => {
@@ -981,9 +921,6 @@ impl Value {
                         Value::Box(arr) => box_rank = box_rank.max(Some(arr.rank())),
                         Value::Num(_) | Value::Byte(_) => {
                             return Err(ctx.error("Cannot combine character and number arrays"))
-                        }
-                        Value::Complex(_) => {
-                            return Err(ctx.error("Cannot combine character and complex arrays"))
                         }
                         _ => {}
                     }
@@ -1019,15 +956,6 @@ impl Value {
                     }
                 },
                 Value::Byte(arr) => match ctx.scalar_fill::<u8>() {
-                    Ok(fill) => arr.fill_to_shape(&max_shape, fill),
-                    Err(e) => {
-                        return Err(C::fill_error(ctx.error(format!(
-                            "Cannot combine arrays with shapes {} and {max_shape}{e}",
-                            arr.shape()
-                        ))))
-                    }
-                },
-                Value::Complex(arr) => match ctx.scalar_fill::<Complex>() {
                     Ok(fill) => arr.fill_to_shape(&max_shape, fill),
                     Err(e) => {
                         return Err(C::fill_error(ctx.error(format!(
@@ -1083,17 +1011,6 @@ impl Value {
                 for val in row_values {
                     match val {
                         Value::Byte(b) => a.append(b, false, ctx)?,
-                        _ => unreachable!(),
-                    }
-                }
-                a.into()
-            }
-            Value::Complex(mut a) => {
-                for val in row_values {
-                    match val {
-                        Value::Num(b) => a.append(b.convert(), false, ctx)?,
-                        Value::Byte(b) => a.append(b.convert(), false, ctx)?,
-                        Value::Complex(b) => a.append(b, false, ctx)?,
                         _ => unreachable!(),
                     }
                 }

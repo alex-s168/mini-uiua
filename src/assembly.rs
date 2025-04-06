@@ -5,11 +5,10 @@ use std::{
     path::PathBuf,
     str::FromStr,
     sync::Arc,
+    collections::HashMap,
 };
 
-use dashmap::DashMap;
 use ecow::{eco_vec, EcoString, EcoVec};
-use serde::*;
 
 use crate::{
     compile::{LocalName, Module},
@@ -71,33 +70,8 @@ impl Hash for Function {
     }
 }
 
-impl Serialize for Function {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        (&self.id, &self.sig, &self.index, &self.hash).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Function {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let (id, sig, index, hash) =
-            <(FunctionId, Signature, usize, u64)>::deserialize(deserializer)?;
-        Ok(Function {
-            id,
-            sig,
-            index,
-            hash,
-        })
-    }
-}
-
 /// Information for a data definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DefInfo {
     /// The name of the definition
     pub name: Option<EcoString>,
@@ -171,168 +145,11 @@ impl Assembly {
     }
     /// Parse a `.uasm` file into an assembly
     pub fn from_uasm(src: &str) -> Result<Self, String> {
-        let rest = src;
-        let (root_src, rest) = rest.split_once("BINDINGS").ok_or("No bindings")?;
-        let (bindings_src, rest) = rest.trim().split_once("FUNCTIONS").ok_or("No functions")?;
-        let (functions_src, rest) = rest.trim().split_once("DATA DEFS").ok_or("No spans")?;
-        let (defs_src, rest) = rest.trim().split_once("SPANS").ok_or("No spans")?;
-        let (spans_src, rest) = rest.trim().split_once("FILES").ok_or("No files")?;
-        let (files_src, rest) = rest
-            .trim()
-            .split_once("STRING INPUTS")
-            .unwrap_or((rest, ""));
-        let strings_src = rest.trim();
-
-        let mut root = Node::empty();
-        for line in root_src.lines().filter(|line| !line.trim().is_empty()) {
-            let node: Node = serde_json::from_str(line).unwrap();
-            root.push(node);
-        }
-
-        let mut bindings = EcoVec::new();
-        for line in bindings_src.lines().filter(|line| !line.trim().is_empty()) {
-            let (public, line) = if let Some(line) = line.strip_prefix("private ") {
-                (false, line)
-            } else {
-                (true, line)
-            };
-            let kind: BindingKind = serde_json::from_str(line).or_else(|e| {
-                if let Some((key, val)) = line.split_once(' ') {
-                    let json = format!("{{{key:?}: {val}}}");
-                    serde_json::from_str(&json).map_err(|_| e.to_string())
-                } else {
-                    Err("No key".into())
-                }
-            })?;
-            bindings.push(BindingInfo {
-                kind,
-                public,
-                span: CodeSpan::dummy(),
-                meta: BindingMeta::default(),
-            });
-        }
-
-        let mut functions = EcoVec::new();
-        for line in functions_src.lines().filter(|line| !line.trim().is_empty()) {
-            let func: Node = serde_json::from_str(line).unwrap();
-            functions.push(func);
-        }
-
-        let mut defs = EcoVec::new();
-        for line in defs_src.lines().filter(|line| !line.trim().is_empty()) {
-            let def: DefInfo = serde_json::from_str(line).unwrap();
-            defs.push(def);
-        }
-
-        let mut spans = EcoVec::new();
-        spans.push(Span::Builtin);
-        for line in spans_src.lines().filter(|line| !line.trim().is_empty()) {
-            if line.trim().is_empty() {
-                spans.push(Span::Builtin);
-            } else {
-                let (src_start, end) = line.trim().rsplit_once(' ').ok_or("invalid span")?;
-                let (src, start) = src_start.split_once(' ').ok_or("invalid span")?;
-                let src = serde_json::from_str(src).map_err(|e| e.to_string())?;
-                let start = serde_json::from_str(start).map_err(|e| e.to_string())?;
-                let end = serde_json::from_str(end).map_err(|e| e.to_string())?;
-                spans.push(Span::Code(CodeSpan { src, start, end }));
-            }
-        }
-
-        let files = DashMap::new();
-        for line in files_src.lines().filter(|line| !line.trim().is_empty()) {
-            let (path, src) = line.split_once(": ").ok_or("No path")?;
-            let path = PathBuf::from(path);
-            let src: EcoString = serde_json::from_str(src).map_err(|e| e.to_string())?;
-            files.insert(path, src);
-        }
-
-        let mut strings = EcoVec::new();
-        for line in strings_src.lines() {
-            let src: EcoString = serde_json::from_str(line).map_err(|e| e.to_string())?;
-            strings.push(src);
-        }
-
-        Ok(Self {
-            root,
-            bindings,
-            functions,
-            defs,
-            spans,
-            inputs: Inputs {
-                files,
-                strings,
-                ..Inputs::default()
-            },
-            dynamic_functions: EcoVec::new(),
-            test_assert_count: 0,
-        })
+        panic!("no");
     }
     /// Serialize the assembly into a `.uasm` file
     pub fn to_uasm(&self) -> String {
-        let mut uasm = String::new();
-        for node in self.root.iter() {
-            uasm.push_str(&serde_json::to_string(node).unwrap());
-            uasm.push('\n');
-        }
-
-        uasm.push_str("\nBINDINGS\n");
-        for binding in &self.bindings {
-            if !binding.public {
-                uasm.push_str("private ");
-            }
-            if let serde_json::Value::Object(map) = serde_json::to_value(&binding.kind).unwrap() {
-                if map.len() == 1 {
-                    let key = map.keys().next().unwrap();
-                    let value = map.values().next().unwrap();
-                    uasm.push_str(&format!("{} {}\n", key, value));
-                    continue;
-                }
-            }
-            uasm.push_str(&serde_json::to_string(&binding.kind).unwrap());
-            uasm.push('\n');
-        }
-
-        uasm.push_str("\nFUNCTIONS\n");
-        for func in &self.functions {
-            uasm.push_str(&serde_json::to_string(&func).unwrap());
-            uasm.push('\n');
-        }
-
-        uasm.push_str("\nDATA DEFS\n");
-        for def in &self.defs {
-            uasm.push_str(&serde_json::to_string(&def).unwrap());
-            uasm.push('\n');
-        }
-
-        uasm.push_str("\nSPANS\n");
-        for span in self.spans.iter().skip(1) {
-            if let Span::Code(span) = span {
-                uasm.push_str(&serde_json::to_string(&span.src).unwrap());
-                uasm.push(' ');
-                uasm.push_str(&serde_json::to_string(&span.start).unwrap());
-                uasm.push(' ');
-                uasm.push_str(&serde_json::to_string(&span.end).unwrap());
-            }
-            uasm.push('\n');
-        }
-
-        uasm.push_str("\nFILES\n");
-        for entry in &self.inputs.files {
-            let key = entry.key();
-            let value = entry.value();
-            uasm.push_str(&format!("{}: {:?}\n", key.display(), value));
-        }
-
-        if !self.inputs.strings.is_empty() {
-            uasm.push_str("\nSTRING INPUTS\n");
-            for src in &self.inputs.strings {
-                uasm.push_str(&serde_json::to_string(src).unwrap());
-                uasm.push('\n');
-            }
-        }
-
-        uasm
+        panic!("no");
     }
 }
 
@@ -410,8 +227,7 @@ pub struct BindingMeta {
 }
 
 /// A kind of global binding
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum BindingKind {
     /// A constant value
     Const(Option<Value>),
@@ -478,7 +294,7 @@ impl fmt::Display for BindingCounts {
 }
 
 /// A comment that documents a binding
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DocComment {
     /// The comment text
     pub text: EcoString,
@@ -487,7 +303,7 @@ pub struct DocComment {
 }
 
 /// A signature in a doc comment
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DocCommentSig {
     /// Whether this is a labelling signature
     pub label: bool,
@@ -556,7 +372,7 @@ impl fmt::Display for DocCommentSig {
 }
 
 /// An argument in a doc comment signature
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DocCommentArg {
     /// The name of the argument
     pub name: EcoString,
@@ -674,18 +490,14 @@ impl From<&str> for DocComment {
 }
 
 /// A repository of code strings input to the compiler
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Clone, Default)]
 pub struct Inputs {
     /// A map of file paths to their string contents
-    #[serde(skip_serializing_if = "DashMap::is_empty")]
-    pub files: DashMap<PathBuf, EcoString>,
+    pub files: HashMap<PathBuf, EcoString>,
     /// A list of input strings without paths
-    #[serde(skip_serializing_if = "EcoVec::is_empty")]
     pub strings: EcoVec<EcoString>,
     /// A map of spans to macro strings
-    #[serde(skip)]
-    pub macros: DashMap<CodeSpan, EcoString>,
+    pub macros: HashMap<CodeSpan, EcoString>,
 }
 
 impl Inputs {
@@ -761,7 +573,7 @@ impl Inputs {
             }
             InputSrc::Macro(span) => {
                 if let Some(src) = self.macros.get(span) {
-                    f(src.value())
+                    f(src)
                 } else {
                     panic!(
                         "Macro at {} not found. Available sources are {}",
@@ -774,7 +586,7 @@ impl Inputs {
         }
     }
     fn available_srcs(&self) -> String {
-        (self.files.iter().map(|e| e.key().display().to_string()))
+        (self.files.iter().map(|e| e.0.display().to_string()))
             .chain(self.strings.iter().map(|i| format!("string {i}")))
             .collect::<Vec<_>>()
             .join(", ")
@@ -782,7 +594,7 @@ impl Inputs {
     /// Get an input string and perform an operation on it
     pub fn try_get_with<T>(&self, src: &InputSrc, f: impl FnOnce(&str) -> T) -> Option<T> {
         match src {
-            InputSrc::File(path) => self.files.get(&**path).map(|src| f(&src)),
+            InputSrc::File(path) => self.files.get(&**path).map(|src| f(src)),
             InputSrc::Str(index) => self.strings.get(*index).map(|src| f(src)),
             InputSrc::Macro(span) => self.macros.get(span).map(|src| f(&src)),
             InputSrc::Literal(s) => Some(f(s)),

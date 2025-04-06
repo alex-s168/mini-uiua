@@ -8,29 +8,25 @@ use std::{
 };
 
 use ecow::{EcoString, EcoVec};
-use serde::*;
 
 use crate::{
     algorithm::{map::MapKeys, pervade::*, ErrorContext, FillContext},
     array::*,
     cowslice::CowSlice,
     grid_fmt::GridFmt,
-    Boxed, Complex, Shape, Uiua, UiuaResult,
+    Boxed, Shape, Uiua, UiuaResult,
 };
 
 /// A generic array value
 ///
 /// This enum is used to represent all possible array types.
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Clone)]
 #[repr(C)]
 pub enum Value {
     /// Byte array used for some boolean operations and for I/O
     Byte(Array<u8>),
     /// Common number array
     Num(Array<f64>),
-    /// Complex number array
-    Complex(Array<Complex>),
     /// Common character array
     Char(Array<char>),
     /// Common box array
@@ -54,7 +50,6 @@ macro_rules! val_as_arr {
         match $input {
             Value::Num($arr) => $body,
             Value::Byte($arr) => $body,
-            Value::Complex($arr) => $body,
             Value::Char($arr) => $body,
             Value::Box($arr) => $body,
         }
@@ -63,7 +58,6 @@ macro_rules! val_as_arr {
         match $input {
             Value::Num(arr) => $f(arr),
             Value::Byte(arr) => $f(arr),
-            Value::Complex(arr) => $f(arr),
             Value::Char(arr) => $f(arr),
             Value::Box(arr) => $f(arr),
         }
@@ -72,7 +66,6 @@ macro_rules! val_as_arr {
         match $input {
             Value::Num(arr) => $f(arr, $env),
             Value::Byte(arr) => $f(arr, $env),
-            Value::Complex(arr) => $f(arr, $env),
             Value::Char(arr) => $f(arr, $env),
             Value::Box(arr) => $f(arr, $env),
         }
@@ -93,7 +86,6 @@ impl Value {
         match self {
             Self::Num(_) => f64::TYPE_ID,
             Self::Byte(_) => u8::TYPE_ID,
-            Self::Complex(_) => Complex::TYPE_ID,
             Self::Char(_) => char::TYPE_ID,
             Self::Box(_) => Boxed::TYPE_ID,
         }
@@ -184,7 +176,6 @@ impl Value {
         match self {
             Self::Num(_) => "number",
             Self::Byte(_) => "number",
-            Self::Complex(_) => "complex",
             Self::Char(_) => "character",
             Self::Box(_) => "box",
         }
@@ -194,7 +185,6 @@ impl Value {
         match self {
             Self::Num(_) => "numbers",
             Self::Byte(_) => "numbers",
-            Self::Complex(_) => "complexes",
             Self::Char(_) => "characters",
             Self::Box(_) => "boxes",
         }
@@ -211,10 +201,6 @@ impl Value {
         match self {
             Self::Num(_) => env.scalar_fill().unwrap_or_else(|_| f64::proxy()).into(),
             Self::Byte(_) => env.scalar_fill().unwrap_or_else(|_| u8::proxy()).into(),
-            Self::Complex(_) => env
-                .scalar_fill()
-                .unwrap_or_else(|_| Complex::proxy())
-                .into(),
             Self::Char(_) => env.scalar_fill().unwrap_or_else(|_| char::proxy()).into(),
             Self::Box(_) => env.scalar_fill().unwrap_or_else(|_| Boxed::proxy()).into(),
         }
@@ -242,14 +228,6 @@ impl Value {
                 ),
             )
             .into(),
-            Self::Complex(_) => Array::new(
-                shape,
-                CowSlice::from_elem(
-                    env.scalar_fill().unwrap_or_else(|_| Complex::proxy()),
-                    elem_count,
-                ),
-            )
-            .into(),
             Self::Char(_) => Array::new(
                 shape,
                 CowSlice::from_elem(
@@ -273,7 +251,6 @@ impl Value {
         match self {
             Value::Num(_) => env.array_fill::<f64>().map(Into::into),
             Value::Byte(_) => env.array_fill::<u8>().map(Into::into),
-            Value::Complex(_) => env.array_fill::<Complex>().map(Into::into),
             Value::Char(_) => env.array_fill::<char>().map(Into::into),
             Value::Box(_) => env.array_fill::<Boxed>().map(Into::into),
         }
@@ -292,7 +269,6 @@ impl Value {
         match self {
             Self::Num(_) => size_of::<f64>(),
             Self::Byte(_) => size_of::<u8>(),
-            Self::Complex(_) => size_of::<Complex>(),
             Self::Char(_) => size_of::<char>(),
             Self::Box(_) => size_of::<Boxed>(),
         }
@@ -439,18 +415,16 @@ impl Value {
         &mut self,
         n: impl FnOnce(&mut Array<f64>) -> T,
         b: impl FnOnce(&mut Array<u8>) -> T,
-        co: impl FnOnce(&mut Array<Complex>) -> T,
         ch: impl FnOnce(&mut Array<char>) -> T,
         f: impl FnOnce(&mut Array<Boxed>) -> T,
     ) -> T {
         match self {
             Self::Num(array) => n(array),
             Self::Byte(array) => b(array),
-            Self::Complex(array) => co(array),
             Self::Char(array) => ch(array),
             Self::Box(array) => {
                 if let Some(Boxed(value)) = array.as_scalar_mut() {
-                    value.generic_mut_deep(n, b, co, ch, f)
+                    value.generic_mut_deep(n, b, ch, f)
                 } else {
                     f(array)
                 }
@@ -463,7 +437,6 @@ impl Value {
         other: Self,
         n: impl FnOnce(Array<f64>, Array<f64>) -> Result<T, E>,
         _b: impl FnOnce(Array<u8>, Array<u8>) -> Result<T, E>,
-        _co: impl FnOnce(Array<Complex>, Array<Complex>) -> Result<T, E>,
         ch: impl FnOnce(Array<char>, Array<char>) -> Result<T, E>,
         f: impl FnOnce(Array<Boxed>, Array<Boxed>) -> Result<T, E>,
         err: impl FnOnce(Self, Self) -> E,
@@ -473,11 +446,6 @@ impl Value {
             (Self::Byte(a), Self::Byte(b)) => _b(a, b),
             (Self::Byte(a), Self::Num(b)) => n(a.convert(), b),
             (Self::Num(a), Self::Byte(b)) => n(a, b.convert()),
-            (Self::Complex(a), Self::Complex(b)) => _co(a, b),
-            (Self::Complex(a), Self::Num(b)) => _co(a, b.convert()),
-            (Self::Num(a), Self::Complex(b)) => _co(a.convert(), b),
-            (Self::Complex(a), Self::Byte(b)) => _co(a, b.convert()),
-            (Self::Byte(a), Self::Complex(b)) => _co(a.convert(), b),
             (Self::Char(a), Self::Char(b)) => ch(a, b),
             (Self::Box(a), Self::Box(b)) => f(a, b),
             (Self::Box(a), b) => f(a, b.coerce_to_boxes()),
@@ -491,7 +459,6 @@ impl Value {
         other: &Self,
         n: impl FnOnce(&Array<f64>, &Array<f64>) -> Result<T, E>,
         _b: impl FnOnce(&Array<u8>, &Array<u8>) -> Result<T, E>,
-        _co: impl FnOnce(&Array<Complex>, &Array<Complex>) -> Result<T, E>,
         ch: impl FnOnce(&Array<char>, &Array<char>) -> Result<T, E>,
         f: impl FnOnce(&Array<Boxed>, &Array<Boxed>) -> Result<T, E>,
         err: impl FnOnce(&Self, &Self) -> E,
@@ -501,11 +468,6 @@ impl Value {
             (Self::Byte(a), Self::Byte(b)) => _b(a, b),
             (Self::Byte(a), Self::Num(b)) => n(&a.convert_ref(), b),
             (Self::Num(a), Self::Byte(b)) => n(a, &b.convert_ref()),
-            (Self::Complex(a), Self::Complex(b)) => _co(a, b),
-            (Self::Complex(a), Self::Num(b)) => _co(a, &b.convert_ref()),
-            (Self::Num(a), Self::Complex(b)) => _co(&a.convert_ref(), b),
-            (Self::Complex(a), Self::Byte(b)) => _co(a, &b.convert_ref()),
-            (Self::Byte(a), Self::Complex(b)) => _co(&a.convert_ref(), b),
             (Self::Char(a), Self::Char(b)) => ch(a, b),
             (Self::Box(a), Self::Box(b)) => f(a, b),
             (Self::Box(a), b) => f(a, &b.coerce_as_boxes()),
@@ -519,7 +481,6 @@ impl Value {
         other: Self,
         n: impl FnOnce(&mut Array<f64>, Array<f64>) -> Result<T, E>,
         _b: impl FnOnce(&mut Array<u8>, Array<u8>) -> Result<T, E>,
-        _co: impl FnOnce(&mut Array<Complex>, Array<Complex>) -> Result<T, E>,
         ch: impl FnOnce(&mut Array<char>, Array<char>) -> Result<T, E>,
         f: impl FnOnce(&mut Array<Boxed>, Array<Boxed>) -> Result<T, E>,
         err: impl FnOnce(&Self, &Self) -> E,
@@ -534,21 +495,6 @@ impl Value {
                 res
             }
             (Self::Num(a), Self::Byte(b)) => n(a, b.convert_ref()),
-            (Self::Complex(a), Self::Complex(b)) => _co(a, b),
-            (Self::Complex(a), Self::Num(b)) => _co(a, b.convert_ref()),
-            (Self::Num(a), Self::Complex(b)) => {
-                let mut a_comp = a.convert_ref();
-                let res = _co(&mut a_comp, b);
-                *self = a_comp.into();
-                res
-            }
-            (Self::Complex(a), Self::Byte(b)) => _co(a, b.convert_ref()),
-            (Self::Byte(a), Self::Complex(b)) => {
-                let mut a_comp = a.convert_ref();
-                let res = _co(&mut a_comp, b);
-                *self = a_comp.into();
-                res
-            }
             (Self::Char(a), Self::Char(b)) => ch(a, b),
             (Self::Box(a), b) => f(a, b.coerce_to_boxes()),
             (a, Self::Box(b)) => {
@@ -587,7 +533,6 @@ impl Value {
             match val {
                 Value::Num(arr) if arr.rank() == 0 => arr.data[0].to_string(),
                 Value::Byte(arr) if arr.rank() == 0 => arr.data[0].to_string(),
-                Value::Complex(arr) if arr.rank() == 0 => arr.data[0].to_string(),
                 Value::Char(arr) if arr.rank() < 2 => {
                     let mut s: String = arr.data.iter().collect();
                     if qoute {
@@ -1406,7 +1351,6 @@ impl Value {
         match self {
             Value::Num(arr) => arr.convert_with(|v| Boxed(Value::from(v))),
             Value::Byte(arr) => arr.convert_with(|v| Boxed(Value::from(v))),
-            Value::Complex(arr) => arr.convert_with(|v| Boxed(Value::from(v))),
             Value::Char(arr) => arr.convert_with(|v| Boxed(Value::from(v))),
             Value::Box(arr) => arr,
         }
@@ -1422,7 +1366,6 @@ impl Value {
         match self {
             Value::Num(arr) => Cow::Owned(arr.convert_ref_with(|v| Boxed(Value::from(v)))),
             Value::Byte(arr) => Cow::Owned(arr.convert_ref_with(|v| Boxed(Value::from(v)))),
-            Value::Complex(arr) => Cow::Owned(arr.convert_ref_with(|v| Boxed(Value::from(v)))),
             Value::Char(arr) => Cow::Owned(arr.convert_ref_with(|v| Boxed(Value::from(v)))),
             Value::Box(arr) => Cow::Borrowed(arr),
         }
@@ -1570,7 +1513,6 @@ value_from!(f64, Num);
 value_from!(u8, Byte);
 value_from!(char, Char);
 value_from!(Boxed, Box);
-value_from!(Complex, Complex);
 
 impl FromIterator<usize> for Value {
     fn from_iter<I: IntoIterator<Item = usize>>(iter: I) -> Self {
@@ -1692,7 +1634,6 @@ value_un_impl!(
     scalar_neg,
     [Num, num],
     (Byte, byte),
-    [Complex, com],
     [Char, char]
 );
 value_un_impl!(
@@ -1700,38 +1641,27 @@ value_un_impl!(
     [Num, num],
     [|meta| meta.flags.is_boolean(), Byte, bool],
     (Byte, byte),
-    [Complex, com]
 );
 value_un_impl!(
     scalar_abs,
     [Num, num],
     (Byte, byte),
-    (Complex, com),
     [Char, char]
 );
-value_un_impl!(sign, [Num, num], [Byte, byte], [Complex, com], (Char, char));
+value_un_impl!(sign, [Num, num], [Byte, byte], (Char, char));
 value_un_impl!(
     sqrt,
     [Num, num],
     [|meta| meta.flags.is_boolean(), Byte, bool],
     (Byte, byte),
-    [Complex, com]
 );
-value_un_impl!(sin, [Num, num], (Byte, byte), [Complex, com]);
-value_un_impl!(cos, [Num, num], (Byte, byte), [Complex, com]);
-value_un_impl!(asin, [Num, num], (Byte, byte), [Complex, com]);
-value_un_impl!(acos, [Num, num], (Byte, byte), [Complex, com]);
-value_un_impl!(floor, [Num, num], [Byte, byte], [Complex, com]);
-value_un_impl!(ceil, [Num, num], [Byte, byte], [Complex, com]);
-value_un_impl!(round, [Num, num], [Byte, byte], [Complex, com]);
-value_un_impl!(
-    complex_re,
-    [Num, generic],
-    [Byte, generic],
-    (Complex, com),
-    [Char, generic]
-);
-value_un_impl!(complex_im, [Num, num], [Byte, byte], (Complex, com));
+value_un_impl!(sin, [Num, num], (Byte, byte));
+value_un_impl!(cos, [Num, num], (Byte, byte));
+value_un_impl!(asin, [Num, num], (Byte, byte));
+value_un_impl!(acos, [Num, num], (Byte, byte));
+value_un_impl!(floor, [Num, num], [Byte, byte]);
+value_un_impl!(ceil, [Num, num], [Byte, byte]);
+value_un_impl!(round, [Num, num], [Byte, byte]);
 
 impl Value {
     /// Get the `absolute value` of a value
@@ -1899,11 +1829,6 @@ macro_rules! value_bin_math_impl {
             (Byte, Byte, byte_byte),
             (Byte, Num, byte_num),
             (Num, Byte, num_byte),
-            [Complex, com_x],
-            (Complex, Num, com_x),
-            (Num, Complex, x_com),
-            (Complex, Byte, com_x),
-            (Byte, Complex, x_com),
         );
     };
 }
@@ -1938,7 +1863,7 @@ value_bin_math_impl!(
     (Char, Byte, char_byte),
 );
 value_bin_math_impl!(div, (Num, Char, num_char), (Byte, Char, byte_char),);
-value_bin_math_impl!(modulus, (Complex, Complex, com_com));
+value_bin_math_impl!(modulus, );
 value_bin_math_impl!(or, [|meta| meta.flags.is_boolean(), Byte, bool_bool]);
 value_bin_math_impl!(scalar_pow);
 value_bin_math_impl!(root);
@@ -1957,19 +1882,6 @@ value_bin_math_impl!(
     [|meta| meta.flags.is_boolean(), Byte, bool_bool],
 );
 
-value_bin_impl!(
-    complex,
-    (Num, Num, num_num),
-    (Byte, Byte, byte_byte),
-    (Byte, Num, byte_num),
-    (Num, Byte, num_byte),
-    [Complex, com_x],
-    (Complex, Num, com_x),
-    (Num, Complex, x_com),
-    (Complex, Byte, com_x),
-    (Byte, Complex, x_com),
-);
-
 macro_rules! eq_impls {
     ($($name:ident),*) => {
         $(
@@ -1977,23 +1889,16 @@ macro_rules! eq_impls {
                 $name,
                 // Value comparable
                 [Num, same_type],
-                (Complex, Complex, com_x),
                 (Box, Box, generic),
                 [Byte, same_type],
                 (Char, Char, generic),
                 (Num, Byte, num_byte),
                 (Byte, Num, byte_num),
-                (Complex, Num, com_x),
-                (Num, Complex, x_com),
-                (Complex, Byte, com_x),
-                (Byte, Complex, x_com),
                 // Type comparable
                 (Num, Char, always_less),
                 (Byte, Char, always_less),
-                (Complex, Char, always_less),
                 (Char, Num, always_greater),
                 (Char, Byte, always_greater),
-                (Char, Complex, always_greater),
             );
         )*
     };
@@ -2006,23 +1911,16 @@ macro_rules! cmp_impls {
                 $name,
                 // Value comparable
                 [Num, same_type],
-                [Complex, com_x],
                 (Box, Box, generic),
                 (Byte, Byte, same_type),
                 (Char, Char, generic),
                 (Num, Byte, num_byte),
                 (Byte, Num, byte_num),
-                (Complex, Num, com_x),
-                (Num, Complex, x_com),
-                (Complex, Byte, com_x),
-                (Byte, Complex, x_com),
                 // Type comparable
                 (Num, Char, always_less),
                 (Byte, Char, always_less),
-                (Complex, Char, always_less),
                 (Char, Num, always_greater),
                 (Char, Byte, always_greater),
-                (Char, Complex, always_greater),
             );
         )*
     };
@@ -2047,7 +1945,6 @@ impl PartialEq for Value {
             (Value::Num(a), Value::Num(b)) => a == b,
             (Value::Byte(a), Value::Byte(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
-            (Value::Complex(a), Value::Complex(b)) => a == b,
             (Value::Box(a), Value::Box(b)) => a == b,
             (Value::Num(a), Value::Byte(b)) => a == b,
             (Value::Byte(a), Value::Num(b)) => a == b,
@@ -2073,7 +1970,6 @@ impl Ord for Value {
         match (self, other) {
             (Value::Num(a), Value::Num(b)) => a.cmp(b),
             (Value::Byte(a), Value::Byte(b)) => a.cmp(b),
-            (Value::Complex(a), Value::Complex(b)) => a.cmp(b),
             (Value::Char(a), Value::Char(b)) => a.cmp(b),
             (Value::Box(a), Value::Box(b)) => a.cmp(b),
             (Value::Num(a), Value::Byte(b)) => a.partial_cmp(b).unwrap(),
@@ -2082,8 +1978,6 @@ impl Ord for Value {
             (_, Value::Num(_)) => Ordering::Greater,
             (Value::Byte(_), _) => Ordering::Less,
             (_, Value::Byte(_)) => Ordering::Greater,
-            (Value::Complex(_), _) => Ordering::Less,
-            (_, Value::Complex(_)) => Ordering::Greater,
             (Value::Char(_), _) => Ordering::Less,
             (_, Value::Char(_)) => Ordering::Greater,
         }
@@ -2095,7 +1989,6 @@ impl Hash for Value {
         match self {
             Value::Num(arr) => arr.hash(state),
             Value::Byte(arr) => arr.hash(state),
-            Value::Complex(arr) => arr.hash(state),
             Value::Char(arr) => arr.hash(state),
             Value::Box(arr) => arr.hash(state),
         }
@@ -2107,7 +2000,6 @@ impl fmt::Debug for Value {
         match self {
             Self::Num(array) => array.fmt(f),
             Self::Byte(array) => array.fmt(f),
-            Self::Complex(array) => array.fmt(f),
             Self::Char(array) => array.fmt(f),
             Self::Box(array) => array.fmt(f),
         }

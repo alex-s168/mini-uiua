@@ -16,13 +16,12 @@ use ecow::{EcoString, EcoVec};
 use tinyvec::TinyVec;
 
 use crate::{
-    cowslice::ecovec_extend_cowslice, Array, ArrayValue, Boxed, CodeSpan, Complex,
+    cowslice::ecovec_extend_cowslice, Array, ArrayValue, Boxed, CodeSpan,
     ExactDoubleIterator, Inputs, Ops, PersistentMeta, Shape, SigNode, Signature, Span, Uiua,
     UiuaError, UiuaErrorKind, UiuaResult, Value,
 };
 
 mod dyadic;
-pub mod encode;
 pub mod loops;
 pub mod map;
 mod monadic;
@@ -251,7 +250,6 @@ pub trait FillContext: ErrorContext {
         match val {
             Value::Num(_) => self.scalar_fill::<f64>().is_ok(),
             Value::Byte(_) => self.scalar_fill::<u8>().is_ok(),
-            Value::Complex(_) => self.scalar_fill::<Complex>().is_ok(),
             Value::Char(_) => self.scalar_fill::<char>().is_ok(),
             Value::Box(_) => self.scalar_fill::<Boxed>().is_ok(),
         }
@@ -338,7 +336,6 @@ where
     match val {
         Value::Num(arr) => fill_array_shape(arr, target, expand_fixed, ctx),
         Value::Byte(arr) => fill_array_shape(arr, target, expand_fixed, ctx),
-        Value::Complex(arr) => fill_array_shape(arr, target, expand_fixed, ctx),
         Value::Char(arr) => fill_array_shape(arr, target, expand_fixed, ctx),
         Value::Box(arr) => fill_array_shape(arr, target, expand_fixed, ctx),
     }
@@ -773,68 +770,3 @@ fn fixed_rows(
     })
 }
 
-#[cfg(not(feature = "fft"))]
-pub fn fft(env: &mut Uiua) -> UiuaResult {
-    Err(env.error("FFT is not available in this environment"))
-}
-
-#[cfg(not(feature = "fft"))]
-pub fn unfft(env: &mut Uiua) -> UiuaResult {
-    Err(env.error("FFT is not available in this environment"))
-}
-
-#[cfg(feature = "fft")]
-pub fn fft(env: &mut Uiua) -> UiuaResult {
-    fft_impl(env, rustfft::FftPlanner::plan_fft_forward)
-}
-
-#[cfg(feature = "fft")]
-pub fn unfft(env: &mut Uiua) -> UiuaResult {
-    fft_impl(env, rustfft::FftPlanner::plan_fft_inverse)
-}
-
-#[cfg(feature = "fft")]
-fn fft_impl(
-    env: &mut Uiua,
-    plan: fn(&mut rustfft::FftPlanner<f64>, usize) -> std::sync::Arc<dyn rustfft::Fft<f64>>,
-) -> UiuaResult {
-    use bytemuck::must_cast_slice_mut;
-
-    use rustfft::{num_complex::Complex64, FftPlanner};
-
-    use crate::Complex;
-
-    let mut arr: Array<Complex> = match env.pop(1)? {
-        Value::Num(arr) => arr.convert(),
-        Value::Byte(arr) => arr.convert(),
-        Value::Complex(arr) => arr,
-        val => {
-            return Err(env.error(format!("Cannot perform FFT on a {} array", val.type_name())));
-        }
-    };
-    if arr.rank() == 0 {
-        env.push(0);
-        return Ok(());
-    }
-    let list_row_len: usize = arr.shape[arr.rank() - 1..].iter().product();
-    if list_row_len == 0 {
-        env.push(arr);
-        return Ok(());
-    }
-    let mut planner = FftPlanner::new();
-    let scaling_factor = 1.0 / (list_row_len as f64).sqrt();
-    for row in arr.data.as_mut_slice().chunks_exact_mut(list_row_len) {
-        let fft = plan(&mut planner, row.len());
-        // NOTE: This works as long as Uiua's `complex` and `num_complex::Complex64` have
-        // the same layout. the `Complex64` layout should remain stable since they are
-        // maintaining compatibility with C. So we only need to ensure that we keep
-        // the same (real, imaginary) ordering that they do.
-        let slice: &mut [Complex64] = must_cast_slice_mut(row);
-        fft.process(slice);
-        for c in row {
-            *c *= scaling_factor;
-        }
-    }
-    env.push(arr);
-    Ok(())
-}

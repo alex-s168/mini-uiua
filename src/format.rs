@@ -1583,12 +1583,6 @@ impl SysBackend for FormatterBackend {
         Ok(())
     }
     fn print_str_trace(&self, _: &str) {}
-    fn show(&self, _: Value) -> Result<(), String> {
-        Ok(())
-    }
-    fn allow_thread_spawning(&self) -> bool {
-        true
-    }
     fn file_exists(&self, path: &str) -> bool {
         native().file_exists(path)
     }
@@ -1622,20 +1616,8 @@ impl SysBackend for FormatterBackend {
     fn write(&self, handle: Handle, contents: &[u8]) -> Result<(), String> {
         native().write(handle, contents)
     }
-    fn var(&self, name: &str) -> Option<String> {
-        native().var(name)
-    }
-    fn tcp_connect(&self, addr: &str) -> Result<Handle, String> {
-        native().tcp_connect(addr)
-    }
-    fn tls_connect(&self, addr: &str) -> Result<Handle, String> {
-        native().tls_connect(addr)
-    }
     fn timezone(&self) -> Result<f64, String> {
         native().timezone()
-    }
-    fn breakpoint(&self, _: &Uiua) -> Result<bool, String> {
-        Ok(true)
     }
 }
 

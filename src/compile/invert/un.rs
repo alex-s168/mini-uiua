@@ -231,7 +231,6 @@ pub static UN_PATTERNS: &[&dyn InvertPattern] = &[
 ];
 
 pub static ANTI_PATTERNS: &[&dyn InvertPattern] = &[
-    &NoUn(NoUnder((Complex, (crate::Complex::I, Mul, Sub)))),
     &(Atan, (Flip, UnAtan, Div, Mul)),
     &((IgnoreMany(Flip), Add), Sub),
     &(Sub, Add),
@@ -249,7 +248,6 @@ pub static ANTI_PATTERNS: &[&dyn InvertPattern] = &[
     &((Flip, Log), (Flip, Root)),
     &((Flip, Root), (Flip, Log)),
     &((Flip, 1, Flip, Div, Pow), (Flip, Log)),
-    &NoUn(NoUnder((Complex, (crate::Complex::I, Mul, Sub)))),
     &(Min, MatchLe),
     &(Max, MatchGe),
     &(Orient, AntiOrient),
@@ -1036,7 +1034,6 @@ inverse!(PrimPat, input, _, Prim(prim, span), {
         Not => Prim(Not, span),
         Sin => ImplPrim(Asin, span),
         Atan => ImplPrim(UnAtan, span),
-        Complex => ImplPrim(UnComplex, span),
         Reverse => Prim(Reverse, span),
         Transpose => ImplPrim(TransposeN(-1), span),
         Bits => ImplPrim(UnBits, span),
@@ -1051,16 +1048,6 @@ inverse!(PrimPat, input, _, Prim(prim, span), {
         Map => ImplPrim(UnMap, span),
         Stack => ImplPrim(UnStack, span),
         Keep => ImplPrim(UnKeep, span),
-        GifEncode => ImplPrim(GifDecode, span),
-        AudioEncode => ImplPrim(AudioDecode, span),
-        ImageEncode => ImplPrim(ImageDecode, span),
-        Sys(SysOp::Clip) => ImplPrim(UnClip, span),
-        Sys(SysOp::RawMode) => ImplPrim(UnRawMode, span),
-        Json => ImplPrim(UnJson, span),
-        Binary => ImplPrim(UnBinary, span),
-        Csv => ImplPrim(UnCsv, span),
-        Xlsx => ImplPrim(UnXlsx, span),
-        Fft => ImplPrim(UnFft, span),
         DateTime => ImplPrim(UnDatetime, span),
         Trace => ImplPrim(
             StackN {
@@ -1087,7 +1074,6 @@ inverse!(ImplPrimPat, input, _, ImplPrim(prim, span), {
         UnUtf16 => ImplPrim(Utf16, span),
         UnGraphemes => Prim(Graphemes, span),
         UnAtan => Prim(Atan, span),
-        UnComplex => Prim(Complex, span),
         UnCouple => Prim(Couple, span),
         UnParse => Prim(Parse, span),
         UnFix => Prim(Fix, span),
@@ -1097,17 +1083,7 @@ inverse!(ImplPrimPat, input, _, ImplPrim(prim, span), {
         UnJoin => Prim(Join, span),
         UnKeep => Prim(Keep, span),
         UnBox => Prim(Box, span),
-        UnJson => Prim(Json, span),
-        UnBinary => Prim(Binary, span),
-        UnCsv => Prim(Csv, span),
-        UnXlsx => Prim(Xlsx, span),
-        UnFft => Prim(Fft, span),
-        ImageDecode => Prim(ImageEncode, span),
-        GifDecode => Prim(GifEncode, span),
-        AudioDecode => Prim(AudioEncode, span),
         UnDatetime => Prim(DateTime, span),
-        UnRawMode => Prim(Sys(SysOp::RawMode), span),
-        UnClip => Prim(Sys(SysOp::Clip), span),
         StackN { n, inverse } => ImplPrim(
             StackN {
                 n,

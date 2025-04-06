@@ -5,7 +5,6 @@
 mod defs;
 pub use defs::*;
 use ecow::EcoVec;
-use regex::Regex;
 
 use core::str;
 use std::{
@@ -13,27 +12,20 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     f64::consts::{PI, TAU},
-    fmt,
-    sync::{
-        atomic::{self, AtomicUsize},
-        OnceLock,
-    },
+    fmt
 };
 
 use enum_iterator::{all, Sequence};
-use once_cell::sync::Lazy;
-use rand::prelude::*;
-use serde::*;
 
 use crate::{
     algorithm::{self, loops, reduce, table, zip, *},
     array::Array,
     boxed::Boxed,
-    encode,
     grid_fmt::GridFmt,
     lex::{AsciiToken, SUBSCRIPT_DIGITS},
     sys::*,
     value::*,
+    randf, shuffle,
     FunctionId, Ops, Shape, Signature, Uiua, UiuaErrorKind, UiuaResult,
 };
 
@@ -211,7 +203,6 @@ impl fmt::Display for ImplPrimitive {
             UnCouple => write!(f, "{Un}{Couple}"),
             UnMap => write!(f, "{Un}{Map}"),
             UnAtan => write!(f, "{Un}{Atan}"),
-            UnComplex => write!(f, "{Un}{Complex}"),
             UnUtf8 => write!(f, "{Un}{Utf8}"),
             UnUtf16 => write!(f, "{Un}{Utf16}"),
             Utf16 => write!(f, "utf₁₆"),
@@ -231,19 +222,9 @@ impl fmt::Display for ImplPrimitive {
             UnFill => write!(f, "{Un}{Fill}"),
             UnBox => write!(f, "{Un}{Box}"),
             UnSort => write!(f, "{Un}{Sort}"),
-            UnJson => write!(f, "{Un}{Json}"),
-            UnBinary => write!(f, "{Un}{Binary}"),
-            UnCsv => write!(f, "{Un}{Csv}"),
-            UnXlsx => write!(f, "{Un}{Xlsx}"),
-            UnFft => write!(f, "{Un}{Fft}"),
             UnDatetime => write!(f, "{Un}{DateTime}"),
             UnBoth => write!(f, "{Un}{Both}"),
             UnBracket => write!(f, "{Un}{Bracket}"),
-            ImageDecode => write!(f, "{Un}{ImageEncode}"),
-            GifDecode => write!(f, "{Un}{GifEncode}"),
-            AudioDecode => write!(f, "{Un}{AudioEncode}"),
-            UnRawMode => write!(f, "{Un}{}", Primitive::Sys(SysOp::RawMode)),
-            UnClip => write!(f, "{Un}{}", Primitive::Sys(SysOp::Clip)),
             ProgressiveIndexOf => write!(f, "{Un}{By}{Select}"),
             UndoUnBits => write!(f, "{Under}{Un}{Bits}"),
             AntiBase => write!(f, "{Anti}{Base}"),
@@ -354,11 +335,7 @@ impl fmt::Display for ImplPrimitive {
 macro_rules! constant {
     ($name:ident, $value:expr) => {
         fn $name() -> Value {
-            thread_local! {
-                #[allow(non_upper_case_globals)]
-                static $name: Value = $value.into();
-            }
-            $name.with(Value::clone)
+            $value.into()
         }
     };
 }
@@ -388,38 +365,32 @@ impl fmt::Display for FormatPrimitive {
     }
 }
 
-static ALIASES: Lazy<HashMap<Primitive, &[&str]>> = Lazy::new(|| {
-    [
-        (Primitive::Identity, &["id"] as &[_]),
-        (Primitive::Gap, &["ga"]),
-        (Primitive::Pop, &["po"]),
-        (Primitive::Fix, &["fx"]),
-        (Primitive::Box, &["bx"]),
-        (Primitive::IndexOf, &["idx"]),
-        (Primitive::Switch, &["sw"]),
-        (Primitive::Stencil, &["st", "win"]),
-        (Primitive::Floor, &["flr", "flor"]),
-        (Primitive::Range, &["ran"]),
-        (Primitive::Partition, &["par"]),
-        (Primitive::Dup, &["dup"]),
-        (Primitive::Deshape, &["flat"]),
-        (Primitive::Ne, &["ne", "neq"]),
-        (Primitive::Eq, &["eq"]),
-        (Primitive::Lt, &["lt"]),
-        (Primitive::Le, &["le", "leq"]),
-        (Primitive::Gt, &["gt"]),
-        (Primitive::Ge, &["ge", "geq"]),
-        (Primitive::Utf8, &["utf", "utf__8"]),
-        (Primitive::First, &["fst"]),
-        (Primitive::Last, &["lst"]),
-        (Primitive::Slf, &["slf"]),
-        (Primitive::Select, &["sel"]),
-        (Primitive::ImageEncode, &["&ime", "imen"]),
-        (Primitive::GifEncode, &["&gife", "gifen"]),
-        (Primitive::AudioEncode, &["&ae", "auden"]),
-    ]
-    .into()
-});
+static ALIASES: [(Primitive, &[&str]); 24] = [
+    (Primitive::Identity, &["id"] as &[_]),
+    (Primitive::Gap, &["ga"]),
+    (Primitive::Pop, &["po"]),
+    (Primitive::Fix, &["fx"]),
+    (Primitive::Box, &["bx"]),
+    (Primitive::IndexOf, &["idx"]),
+    (Primitive::Switch, &["sw"]),
+    (Primitive::Stencil, &["st", "win"]),
+    (Primitive::Floor, &["flr", "flor"]),
+    (Primitive::Range, &["ran"]),
+    (Primitive::Partition, &["par"]),
+    (Primitive::Dup, &["dup"]),
+    (Primitive::Deshape, &["flat"]),
+    (Primitive::Ne, &["ne", "neq"]),
+    (Primitive::Eq, &["eq"]),
+    (Primitive::Lt, &["lt"]),
+    (Primitive::Le, &["le", "leq"]),
+    (Primitive::Gt, &["gt"]),
+    (Primitive::Ge, &["ge", "geq"]),
+    (Primitive::Utf8, &["utf", "utf__8"]),
+    (Primitive::First, &["fst"]),
+    (Primitive::Last, &["lst"]),
+    (Primitive::Slf, &["slf"]),
+    (Primitive::Select, &["sel"]),
+];
 
 macro_rules! fill {
     ($ops:expr, $env:expr, $with:ident, $without_but:ident) => {{
@@ -548,10 +519,9 @@ impl Primitive {
         matches!(
             self,
             (Reach | Slf | Above | Around)
-                | (Or | Base | Fft | Layout | Binary)
+                | (Or | Base)
                 | Astar
                 | (Derivative | Integral)
-                | Sys(Ffi | MemCopy | MemFree | TlsListen | Breakpoint)
                 | (Stringify | Quote | Sig)
         )
     }
@@ -561,7 +531,7 @@ impl Primitive {
     }
     /// Get the short aliases for this primitive
     pub fn aliases(&self) -> &'static [&'static str] {
-        ALIASES.get(self).copied().unwrap_or_default()
+        ALIASES.iter().find(|(k,_)| k == self).unwrap().1
     }
     /// Try to parse a primitive from a name prefix
     pub fn from_format_name(name: &str) -> Option<Self> {
@@ -571,13 +541,11 @@ impl Primitive {
         if name.len() < 2 {
             return None;
         }
-        static REVERSE_ALIASES: Lazy<HashMap<&'static str, Primitive>> = Lazy::new(|| {
-            ALIASES
-                .iter()
-                .flat_map(|(prim, aliases)| aliases.iter().map(|&s| (s, *prim)))
-                .collect()
-        });
-        if let Some(prim) = REVERSE_ALIASES.get(name) {
+        let reverse_aliases: HashMap<&'static str, Primitive> = ALIASES
+            .iter()
+            .flat_map(|(prim, aliases)| aliases.iter().map(|&s| (s, *prim)))
+            .collect();
+        if let Some(prim) = reverse_aliases.get(name) {
             return Some(*prim);
         }
         if let Some(prim) = Primitive::non_deprecated().find(|p| p.name() == name) {
@@ -813,7 +781,6 @@ impl Primitive {
             Primitive::Min => env.dyadic_oo_env(Value::min)?,
             Primitive::Max => env.dyadic_oo_env(Value::max)?,
             Primitive::Atan => env.dyadic_oo_env(Value::atan2)?,
-            Primitive::Complex => env.dyadic_oo_env(Value::complex)?,
             Primitive::Match => env.dyadic_rr(|a, b| a == b)?,
             Primitive::Join => env.dyadic_oo_env(|a, b, env| a.join(b, true, env))?,
             Primitive::Transpose => env.monadic_mut(Value::transpose)?,
@@ -919,33 +886,20 @@ impl Primitive {
                     .into());
                 }
             }
-            Primitive::Rand => env.push(random()),
+            Primitive::Rand => env.push(randf() as f64),
             Primitive::Gen => env.dyadic_rr_env(Value::gen)?,
             Primitive::Tag => {
-                static NEXT_TAG: AtomicUsize = AtomicUsize::new(0);
-                let tag = NEXT_TAG.fetch_add(1, atomic::Ordering::Relaxed);
-                env.push(tag);
+                panic!("no tag");
             }
             Primitive::Type => {
                 let val = env.pop(1)?;
                 env.push(val.type_id());
             }
-            Primitive::Wait => {
-                let id = env.pop(1)?;
-                env.wait(id)?;
-            }
-            Primitive::Send => {
-                let id = env.pop(1)?;
-                let val = env.pop(2)?;
-                env.send(id, val)?;
-            }
-            Primitive::Recv => {
-                let id = env.pop(1)?;
-                env.recv(id)?;
-            }
+            Primitive::Wait |
+            Primitive::Send |
+            Primitive::Recv |
             Primitive::TryRecv => {
-                let id = env.pop(1)?;
-                env.try_recv(id)?;
+                panic!("no");
             }
             Primitive::Now => env.push(env.rt.backend.now()),
             Primitive::TimeZone => {
@@ -985,18 +939,6 @@ impl Primitive {
             }
             Primitive::Trace => trace(env, false)?,
             Primitive::Stack => stack(env, false)?,
-            Primitive::Regex => regex(env)?,
-            Primitive::Json => env.monadic_ref_env(Value::to_json_string)?,
-            Primitive::Binary => env.monadic_ref_env(Value::to_binary)?,
-            Primitive::Csv => env.monadic_ref_env(Value::to_csv)?,
-            Primitive::Xlsx => {
-                env.monadic_ref_env(|value, env| value.to_xlsx(env).map(EcoVec::from))?
-            }
-            Primitive::ImageEncode => encode::image_encode(env)?,
-            Primitive::GifEncode => encode::gif_encode(env)?,
-            Primitive::AudioEncode => encode::audio_encode(env)?,
-            Primitive::Layout => env.dyadic_oo_env(encode::layout_text)?,
-            Primitive::Fft => algorithm::fft(env)?,
             Primitive::Stringify
             | Primitive::Quote
             | Primitive::Sig
@@ -1151,41 +1093,13 @@ impl Primitive {
                 path::path(neighbors, is_goal, None, env)?;
             }
             Primitive::Memo => {
-                let [f] = get_ops(ops, env)?;
-                let mut args = Vec::with_capacity(f.sig.args);
-                for i in 0..f.sig.args {
-                    args.push(env.pop(i + 1)?);
-                }
-                let mut memo = env.rt.memo.get_or_default().borrow_mut();
-                if let Some(f_memo) = memo.get_mut(&f.node) {
-                    if let Some(outputs) = f_memo.get(&args) {
-                        let outputs = outputs.clone();
-                        drop(memo);
-                        for val in outputs {
-                            env.push(val);
-                        }
-                        return Ok(());
-                    }
-                }
-                drop(memo);
-                for arg in args.iter().rev() {
-                    env.push(arg.clone());
-                }
-                env.exec(f.node.clone())?;
-                let outputs = env.clone_stack_top(f.sig.outputs)?;
-                let mut memo = env.rt.memo.get_or_default().borrow_mut();
-                memo.borrow_mut()
-                    .entry(f.node)
-                    .or_default()
-                    .insert(args, outputs.clone());
+                panic!("no");
             }
             Primitive::Spawn => {
-                let [f] = get_ops(ops, env)?;
-                env.spawn(f.sig.args, false, f)?;
+                panic!("no");
             }
             Primitive::Pool => {
-                let [f] = get_ops(ops, env)?;
-                env.spawn(f.sig.args, true, f)?;
+                panic!("no");
             }
             Primitive::Sys(op) => op.run_mod(ops, env)?,
             prim => {
@@ -1303,13 +1217,6 @@ impl ImplPrimitive {
                 env.push(cos);
                 env.push(sin);
             }
-            ImplPrimitive::UnComplex => {
-                let x = env.pop(1)?;
-                let im = x.clone().complex_im(env)?;
-                let re = x.complex_re(env)?;
-                env.push(re);
-                env.push(im);
-            }
             ImplPrimitive::UnParse => env.monadic_ref_env(Value::unparse)?,
             ImplPrimitive::UnFix => env.monadic_mut_env(Value::unfix)?,
             ImplPrimitive::UnShape => env.monadic_ref_env(Value::unshape)?,
@@ -1326,46 +1233,12 @@ impl ImplPrimitive {
                     env.push(arr);
                 } else {
                     let mut rows: Vec<Value> = arr.into_rows().collect();
-                    RNG.with_borrow_mut(|rng| rows.shuffle(rng));
+                    shuffle(&mut rows);
                     env.push(Value::from_row_values_infallible(rows));
                 }
             }
-            ImplPrimitive::UnJson => {
-                let json = env.pop(1)?.as_string(env, "JSON expects a string")?;
-                let val = Value::from_json_string(&json, env)?;
-                env.push(val);
-            }
-            ImplPrimitive::UnBinary => {
-                let bytes = env.pop(1)?.as_bytes(env, "Binary expects bytes")?;
-                let val = Value::from_binary(&bytes, env)?;
-                env.push(val);
-            }
-            ImplPrimitive::UnCsv => {
-                let csv = env.pop(1)?.as_string(env, "CSV expects a string")?;
-                let val = Value::from_csv(&csv, env)?;
-                env.push(val);
-            }
-            ImplPrimitive::UnXlsx => {
-                let xlsx = env.pop(1)?.as_bytes(env, "XLSX expects bytes")?;
-                let val = Value::from_xlsx(&xlsx, env)?;
-                env.push(val);
-            }
-            ImplPrimitive::UnFft => algorithm::unfft(env)?,
             ImplPrimitive::UnDatetime => env.monadic_ref_env(Value::undatetime)?,
             ImplPrimitive::ProgressiveIndexOf => env.dyadic_rr_env(Value::progressive_index_of)?,
-            ImplPrimitive::ImageDecode => encode::image_decode(env)?,
-            ImplPrimitive::GifDecode => encode::gif_decode(env)?,
-            ImplPrimitive::AudioDecode => encode::audio_decode(env)?,
-            ImplPrimitive::UnRawMode => {
-                let raw_mode = env.rt.backend.get_raw_mode().map_err(|e| env.error(e))?;
-                env.push(raw_mode);
-            }
-            ImplPrimitive::UnClip => {
-                let contents = env.pop(1)?.as_string(env, "Contents must be a string")?;
-                (env.rt.backend)
-                    .set_clipboard(&contents)
-                    .map_err(|e| env.error(e))?;
-            }
             ImplPrimitive::MatrixDiv => env.dyadic_rr_env(Value::matrix_div)?,
             // Unders
             ImplPrimitive::UndoUnBits => {
@@ -1567,12 +1440,12 @@ impl ImplPrimitive {
             ImplPrimitive::AllSame => env.monadic_ref(Value::all_same)?,
             ImplPrimitive::ReplaceRand => {
                 env.pop(1)?;
-                env.push(random());
+                env.push(randf() as f64);
             }
             ImplPrimitive::ReplaceRand2 => {
                 env.pop(1)?;
                 env.pop(2)?;
-                env.push(random());
+                env.push(randf() as f64);
             }
             ImplPrimitive::CountUnique => env.monadic_ref(Value::count_unique)?,
             ImplPrimitive::MatchPattern => {
@@ -1582,14 +1455,6 @@ impl ImplPrimitive {
                     (Value::Num(a), Value::Num(b))
                         if a.shape() == b.shape()
                             && (a.data.iter().zip(&b.data)).all(|(a, b)| (a - b).abs() < 1e-12) =>
-                    {
-                        return Ok(())
-                    }
-                    (Value::Complex(a), Value::Complex(b))
-                        if a.shape() == b.shape()
-                            && a.data.iter().zip(&b.data).all(|(a, b)| {
-                                (a.re - b.re).abs() < 1e-12 && (a.im - b.im).abs() < 1e-12
-                            }) =>
                     {
                         return Ok(())
                     }
@@ -1962,57 +1827,6 @@ impl ImplPrimitive {
     }
 }
 
-fn regex(env: &mut Uiua) -> UiuaResult {
-    thread_local! {
-        pub static REGEX_CACHE: RefCell<HashMap<String, Regex>> = RefCell::new(HashMap::new());
-    }
-    let pattern = env.pop(1)?.as_string(env, "Pattern must be a string")?;
-    let target = env
-        .pop(1)?
-        .as_string(env, "Matching target must be a string")?;
-    REGEX_CACHE.with(|cache| -> UiuaResult {
-        let mut cache = cache.borrow_mut();
-        let regex = if let Some(regex) = cache.get(&pattern) {
-            regex
-        } else {
-            let regex =
-                Regex::new(&pattern).map_err(|e| env.error(format!("Invalid pattern: {}", e)))?;
-            cache.entry(pattern.clone()).or_insert(regex.clone())
-        };
-
-        let mut matches: Value =
-            Array::<Boxed>::new([0, regex.captures_len()].as_slice(), []).into();
-
-        for caps in regex.captures_iter(&target) {
-            let row: EcoVec<Boxed> = caps
-                .iter()
-                .flat_map(|m| {
-                    m.map(|m| Boxed(Value::from(m.as_str())))
-                        .or_else(|| env.value_fill().cloned().map(Value::boxed_if_not))
-                })
-                .collect();
-            matches.append(row.into(), false, env)?;
-        }
-
-        env.push(matches);
-        Ok(())
-    })
-}
-
-thread_local! {
-    pub(crate) static RNG: RefCell<SmallRng> = RefCell::new(SmallRng::from_entropy());
-}
-
-/// Generate a random number, equivalent to [`Primitive::Rand`]
-pub fn random() -> f64 {
-    RNG.with(|rng| rng.borrow_mut().gen::<f64>())
-}
-
-/// Seed the random number generator
-pub fn seed_random(seed: u64) {
-    RNG.with(|rng| *rng.borrow_mut() = SmallRng::seed_from_u64(seed));
-}
-
 fn trace(env: &mut Uiua, inverse: bool) -> UiuaResult {
     let val = env.pop(1)?;
     let span: String = if inverse {
@@ -2187,683 +2001,4 @@ fn format_trace_item_lines(mut lines: Vec<String>, mut max_line_len: usize) -> V
         line.push('\n');
     }
     lines
-}
-
-/// Documentation for a primitive
-#[derive(Default, Debug)]
-pub struct PrimDoc {
-    /// The short description
-    pub short: Vec<PrimDocFragment>,
-    /// The full documentation
-    pub lines: Vec<PrimDocLine>,
-}
-
-impl PrimDoc {
-    /// Get the primitive's short description
-    pub fn short_text(&self) -> Cow<str> {
-        if self.short.len() == 1 {
-            match &self.short[0] {
-                PrimDocFragment::Text(t) => return Cow::Borrowed(t),
-                PrimDocFragment::Code(c) => return Cow::Borrowed(c),
-                PrimDocFragment::Emphasis(e) => return Cow::Borrowed(e),
-                PrimDocFragment::Strong(s) => return Cow::Borrowed(s),
-                PrimDocFragment::Primitive { prim, named: true } => {
-                    return Cow::Borrowed(prim.name());
-                }
-                PrimDocFragment::Link { text, .. } => return Cow::Borrowed(text),
-                PrimDocFragment::Primitive { .. } => {}
-            }
-        }
-        let mut s = String::new();
-        for frag in &self.short {
-            match frag {
-                PrimDocFragment::Text(t) => s.push_str(t),
-                PrimDocFragment::Code(c) => s.push_str(c),
-                PrimDocFragment::Emphasis(e) => s.push_str(e),
-                PrimDocFragment::Strong(str) => s.push_str(str),
-                PrimDocFragment::Link { text, .. } => s.push_str(text),
-                PrimDocFragment::Primitive { prim, named } => {
-                    if *named {
-                        s.push_str(prim.name());
-                    } else if let Some(c) = prim.glyph() {
-                        s.push(c);
-                    } else {
-                        s.push_str(prim.name());
-                    }
-                }
-            }
-        }
-        Cow::Owned(s)
-    }
-    pub(crate) fn from_lines(s: &str) -> Self {
-        let mut short = Vec::new();
-        let mut lines = Vec::new();
-        for line in s.lines() {
-            let line = line.trim();
-            if let Some(mut ex) = line.strip_prefix("ex:") {
-                // Example
-                if ex.starts_with(' ') {
-                    ex = &ex[1..]
-                }
-                lines.push(PrimDocLine::Example(PrimExample {
-                    input: ex.into(),
-                    should_error: false,
-                    output: OnceLock::new(),
-                }));
-            } else if let Some(mut ex) = line.strip_prefix("ex!") {
-                // Example
-                if ex.starts_with(' ') {
-                    ex = &ex[1..]
-                }
-                lines.push(PrimDocLine::Example(PrimExample {
-                    input: ex.into(),
-                    should_error: true,
-                    output: OnceLock::new(),
-                }));
-            } else if let Some(mut ex) = line.strip_prefix(':') {
-                // Continue example
-                if ex.starts_with(' ') {
-                    ex = &ex[1..]
-                }
-                if let Some(PrimDocLine::Example(example)) = lines.last_mut() {
-                    example.input.push('\n');
-                    example.input.push_str(ex);
-                } else {
-                    lines.push(PrimDocLine::Text(parse_doc_line_fragments(line)));
-                }
-            } else if short.is_empty() {
-                // Set short
-                short = parse_doc_line_fragments(line);
-            } else {
-                // Add line
-                lines.push(PrimDocLine::Text(parse_doc_line_fragments(line)));
-            }
-        }
-        while let Some(PrimDocLine::Text(frags)) = lines.first() {
-            if frags.is_empty() {
-                lines.remove(0);
-            } else {
-                break;
-            }
-        }
-        while let Some(PrimDocLine::Text(frags)) = lines.last() {
-            if frags.is_empty() {
-                lines.pop();
-            } else {
-                break;
-            }
-        }
-        Self { short, lines }
-    }
-}
-
-/// An primitive code example
-#[derive(Debug)]
-pub struct PrimExample {
-    input: String,
-    should_error: bool,
-    output: OnceLock<UiuaResult<Vec<String>>>,
-}
-
-impl PrimExample {
-    /// Get the example's source code
-    pub fn input(&self) -> &str {
-        &self.input
-    }
-    /// Check whether the example should error
-    pub fn should_error(&self) -> bool {
-        self.should_error
-    }
-    /// Get the example's output
-    pub fn output(&self) -> &UiuaResult<Vec<String>> {
-        self.output.get_or_init(|| {
-            let mut env = Uiua::with_safe_sys();
-            match env.run_str(&self.input) {
-                Ok(_) => Ok(env.take_stack().into_iter().map(|val| val.show()).collect()),
-                Err(e) => Err(e),
-            }
-        })
-    }
-    /// Get the example's output as strings
-    pub fn output_strings(&self) -> Result<&Vec<String>, String> {
-        self.output().as_ref().map_err(|e| {
-            e.to_string()
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .split_once(' ')
-                .unwrap_or_default()
-                .1
-                .into()
-        })
-    }
-}
-
-/// A line in a primitive's documentation
-#[derive(Debug)]
-pub enum PrimDocLine {
-    /// Just text
-    Text(Vec<PrimDocFragment>),
-    /// An example
-    Example(PrimExample),
-}
-
-/// A pseudo-markdown fragment for primitive documentation
-#[allow(missing_docs)]
-#[derive(Debug, Clone)]
-pub enum PrimDocFragment {
-    Text(String),
-    Code(String),
-    Emphasis(String),
-    Strong(String),
-    Primitive { prim: Primitive, named: bool },
-    Link { text: String, url: String },
-}
-
-pub(crate) fn parse_doc_line_fragments(mut line: &str) -> Vec<PrimDocFragment> {
-    let mut end_link = None;
-    if let Some(link_start) = line.find("https://") {
-        let end = &line[link_start..];
-        if !end.contains(' ') && !end.contains(')') {
-            end_link = Some(end);
-            line = &line[..link_start];
-        }
-    }
-    let mut frags = Vec::new();
-    #[derive(PartialEq, Eq)]
-    enum FragKind {
-        Text,
-        Code,
-        Emphasis,
-        Strong,
-        Primitive,
-    }
-    impl FragKind {
-        fn open(&self) -> &str {
-            match self {
-                FragKind::Text => "",
-                FragKind::Code => "`",
-                FragKind::Emphasis => "*",
-                FragKind::Strong => "**",
-                FragKind::Primitive => "[",
-            }
-        }
-    }
-    let mut curr = String::new();
-    let mut kind = FragKind::Text;
-    let mut chars = line.char_indices().peekable();
-    while let Some((i, c)) = chars.next() {
-        match c {
-            '\\' if chars.peek().map(|i| i.1) == Some('`') => {
-                curr.push('`');
-                chars.next();
-            }
-            '`' if kind == FragKind::Code => {
-                if let Some(prim) = Primitive::from_name(&curr) {
-                    frags.push(PrimDocFragment::Primitive { prim, named: false });
-                } else {
-                    frags.push(PrimDocFragment::Code(curr));
-                }
-                curr = String::new();
-                kind = FragKind::Text;
-            }
-            '`' if kind == FragKind::Text => {
-                frags.push(PrimDocFragment::Text(curr));
-                curr = String::new();
-                kind = FragKind::Code;
-            }
-            '*' if kind == FragKind::Emphasis && curr.is_empty() => {
-                kind = FragKind::Strong;
-            }
-            '*' if kind == FragKind::Emphasis => {
-                frags.push(PrimDocFragment::Emphasis(curr));
-                curr = String::new();
-                kind = FragKind::Text;
-            }
-            '*' if kind == FragKind::Strong
-                && chars.peek().map(|i| i.1) == Some('*')
-                && line[i + 2..].contains("**") =>
-            {
-                chars.next();
-                frags.push(PrimDocFragment::Strong(curr));
-                curr = String::new();
-                kind = FragKind::Text;
-            }
-            '*' if kind == FragKind::Text && line[i + 1..].contains('*') => {
-                frags.push(PrimDocFragment::Text(curr));
-                curr = String::new();
-                kind = FragKind::Emphasis;
-            }
-            '[' if kind == FragKind::Text => {
-                frags.push(PrimDocFragment::Text(curr));
-                curr = String::new();
-                kind = FragKind::Primitive;
-            }
-            ']' if kind == FragKind::Primitive && chars.peek().map(|i| i.1) == Some('(') => {
-                chars.next();
-                let mut url = String::new();
-                for (_, c) in chars.by_ref() {
-                    if c == ')' {
-                        break;
-                    }
-                    url.push(c);
-                }
-                frags.push(PrimDocFragment::Link { text: curr, url });
-                curr = String::new();
-                kind = FragKind::Text;
-            }
-            ']' if kind == FragKind::Primitive => {
-                if let Some(prim) = Primitive::from_name(&curr) {
-                    frags.push(PrimDocFragment::Primitive { prim, named: true });
-                } else {
-                    frags.push(PrimDocFragment::Text(curr));
-                }
-                curr = String::new();
-                kind = FragKind::Text;
-            }
-            ']' if kind == FragKind::Text => {
-                frags.push(PrimDocFragment::Text(curr));
-                curr = String::new();
-            }
-            c => curr.push(c),
-        }
-    }
-    curr.insert_str(0, kind.open());
-    if !curr.is_empty() {
-        frags.push(PrimDocFragment::Text(curr));
-    }
-    if let Some(url) = end_link {
-        frags.push(PrimDocFragment::Link {
-            text: url.to_string(),
-            url: url.to_string(),
-        });
-    }
-    frags
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn name_collisions() {
-        for a in Primitive::all() {
-            for b in Primitive::all() {
-                if a >= b {
-                    continue;
-                }
-                assert_ne!(a.name(), b.name(), "{a:?} and {b:?} have the same name",)
-            }
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "native_sys")]
-    fn prim_docs() {
-        for prim in Primitive::non_deprecated() {
-            for line in &prim.doc().lines {
-                if let PrimDocLine::Example(ex) = line {
-                    if [
-                        "&sl", "&tcpc", "&tlsc", "&ast", "&clip", "&fo", "&fc", "&fde", "&ftr",
-                        "&fld", "&fif", "&fras", "&frab", "&fmd", "timezone", "&b",
-                    ]
-                    .iter()
-                    .any(|prim| ex.input.contains(prim))
-                    {
-                        continue;
-                    }
-                    println!("{prim} example:\n{}", ex.input); // Allow println
-                    let mut env = Uiua::with_backend(SafeSys::with_thread_spawning());
-                    match env.run_str(&ex.input) {
-                        Ok(mut comp) => {
-                            if let Some(diag) = comp.take_diagnostics().into_iter().next() {
-                                if !ex.should_error {
-                                    panic!("\nExample failed:\n{}\n{}", ex.input, diag.report());
-                                }
-                            } else if ex.should_error {
-                                panic!("Example should have failed: {}", ex.input);
-                            }
-                        }
-                        Err(e) => {
-                            if !ex.should_error {
-                                panic!("\nExample failed:\n{}\n{}", ex.input, e.report());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn primitive_from_name() {
-        for prim in Primitive::non_deprecated() {
-            assert_eq!(Primitive::from_name(prim.name()), Some(prim));
-        }
-        for (name, test) in [
-            (
-                "from_format_name",
-                Primitive::from_format_name as fn(&str) -> Option<Primitive>,
-            ),
-            ("from_format_name_multi", |name| {
-                Primitive::from_format_name_multi(name)
-                    .unwrap()
-                    .first()
-                    .map(|(prim, _)| *prim)
-            }),
-        ] {
-            for prim in Primitive::non_deprecated() {
-                if prim.name().contains(' ') {
-                    continue;
-                }
-                let char_test = match prim.glyph() {
-                    None => prim.name().len(),
-                    Some(c) if c.is_ascii() => continue,
-                    Some(_) => 4,
-                };
-                let short: String = prim.name().chars().take(char_test).collect();
-                assert_eq!(test(&short), Some(prim));
-            }
-            for prim in Primitive::non_deprecated() {
-                if matches!(
-                    prim,
-                    Primitive::Rand | Primitive::Trace | Primitive::Parse | Primitive::Slf
-                ) {
-                    continue;
-                }
-                let char_test = match prim.glyph() {
-                    None => prim.name().len(),
-                    Some(c) if c.is_ascii() || prim.ascii().is_some() => continue,
-                    Some(_) => 3,
-                };
-                let short: String = prim.name().chars().take(char_test).collect();
-                assert_eq!(
-                    test(&short),
-                    Some(prim),
-                    "{} does not format from {:?} with {}",
-                    prim.format(),
-                    short,
-                    name
-                );
-            }
-        }
-        assert_eq!(Primitive::from_format_name("id"), Some(Primitive::Identity));
-    }
-
-    #[test]
-    fn from_multiname() {
-        assert!(matches!(
-            &*Primitive::from_format_name_multi("rev").expect("rev"),
-            [(Primitive::Reverse, _)]
-        ));
-        assert!(matches!(
-            &*Primitive::from_format_name_multi("revrev").expect("revrev"),
-            [(Primitive::Reverse, _), (Primitive::Reverse, _)]
-        ));
-        assert!(matches!(
-            &*Primitive::from_format_name_multi("tabkee").unwrap(),
-            [(Primitive::Table, _), (Primitive::Keep, _)]
-        ));
-        assert_eq!(Primitive::from_format_name_multi("foo"), None);
-    }
-
-    #[cfg(test)]
-    #[test]
-    fn gen_grammar_file() {
-        fn gen_group(prims: impl Iterator<Item = Primitive> + Clone, additional: &str) -> String {
-            let glyphs = prims
-                .clone()
-                .flat_map(|p| {
-                    p.glyph()
-                        .into_iter()
-                        .chain(p.ascii().into_iter().flat_map(|ascii| {
-                            Some(ascii.to_string())
-                                .filter(|s| s.len() == 1)
-                                .into_iter()
-                                .flat_map(|s| s.chars().collect::<Vec<_>>())
-                        }))
-                })
-                .collect::<String>()
-                .replace('\\', "\\\\\\\\")
-                .replace('-', "\\\\-")
-                .replace('*', "\\\\*")
-                .replace('^', "\\\\^");
-            let format_names: Vec<_> = prims
-                .clone()
-                .map(|p| {
-                    let name = p.name();
-                    let min_len = if name.starts_with('&') {
-                        name.len()
-                    } else {
-                        (2..=name.len())
-                            .find(|&n| Primitive::from_format_name(&name[..n]) == Some(p))
-                            .unwrap()
-                    };
-                    let mut start: String = name.chars().take(min_len).collect();
-                    let mut end = String::new();
-                    for c in name.chars().skip(min_len) {
-                        start.push('(');
-                        start.push(c);
-                        end.push_str(")?");
-                    }
-                    format!("{}{}", start, end)
-                })
-                .collect();
-            let format_names = format_names.join("|");
-            let mut literal_names: Vec<_> = prims
-                .map(|p| p.names())
-                .filter(|p| p.ascii.is_none() && p.glyph.is_none())
-                .map(|n| format!("|{}", n.text))
-                .collect();
-            literal_names.sort_by_key(|s| s.len());
-            literal_names.reverse();
-            let literal_names = literal_names.join("");
-            format!(
-                r#"[{glyphs}]|(?<![a-zA-Z$])({format_names}{literal_names})(?![a-zA-Z]){additional}"#
-            )
-        }
-
-        let stack_functions = gen_group(
-            Primitive::non_deprecated()
-                .filter(|p| {
-                    [PrimClass::Stack, PrimClass::Debug].contains(&p.class())
-                        && p.modifier_args().is_none()
-                })
-                .chain(Some(Primitive::Identity)),
-            "",
-        );
-        let noadic_functions = gen_group(
-            Primitive::non_deprecated().filter(|p| {
-                ![PrimClass::Stack, PrimClass::Debug, PrimClass::Constant].contains(&p.class())
-                    && p.modifier_args().is_none()
-                    && p.args() == Some(0)
-            }),
-            "",
-        );
-        let monadic_functions = gen_group(
-            Primitive::non_deprecated().filter(|p| {
-                ![PrimClass::Stack, PrimClass::Debug, PrimClass::Planet].contains(&p.class())
-                    && p.modifier_args().is_none()
-                    && p.args() == Some(1)
-            }),
-            "|⋊[a-zA-Z]*",
-        );
-        let dyadic_functions = gen_group(
-            Primitive::non_deprecated().filter(|p| {
-                ![PrimClass::Stack, PrimClass::Debug].contains(&p.class())
-                    && p.modifier_args().is_none()
-                    && p.args() == Some(2)
-            }),
-            "",
-        );
-        let monadic_modifiers = gen_group(
-            Primitive::non_deprecated().filter(|p| matches!(p.modifier_args(), Some(1))),
-            "",
-        );
-        let dyadic_modifiers: String = gen_group(
-            Primitive::non_deprecated().filter(|p| matches!(p.modifier_args(), Some(n) if n >= 2)),
-            "",
-        );
-
-        let text = format!(
-            r##"{{
-	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-	"name": "Uiua",
-	"firstLineMatch": "^#!/.*\\buiua\\b",
-	"fileTypes": [
-		"ua"
-	],
-	"patterns": [
-		{{
-			"include": "#comments"
-		}},
-		{{
-			"include": "#strings-multiline-format"
-		}},
-		{{
-			"include": "#strings-multiline"
-		}},
-		{{
-			"include": "#strings-format"
-		}},
-		{{
-			"include": "#strings-normal"
-		}},
-        {{
-            "include": "#characters"
-        }},
-        {{
-            "include": "#labels"
-        }},
-        {{
-            "include": "#module_delim"
-        }},
-        {{
-            "include": "#strand"
-        }},
-		{{
-			"include": "#stack"
-		}},
-		{{
-			"include": "#noadic"
-		}},
-		{{
-			"include": "#monadic"
-		}},
-		{{
-			"include": "#dyadic"
-		}},
-		{{
-			"include": "#mod1"
-		}},
-		{{
-			"include": "#mod2"
-		}},
-        {{
-            "include": "#idents"
-        }},
-		{{
-			"include": "#numbers"
-		}}
-	],
-	"repository": {{
-        "idents": {{
-            "name": "variable.parameter.uiua",
-            "match": "\\b[a-zA-Z]+([₀₁₂₃₄₅₆₇₈₉]|__\\d+)*[!‼]*\\b"
-        }},
-		"comments": {{
-			"name": "comment.line.uiua",
-			"match": "(#.*$|$[a-zA-Z]*)"
-		}},
-		"strings-normal": {{
-			"name": "constant.character.escape",
-			"begin": "\"",
-			"end": "\"",
-			"patterns": [
-				{{
-					"name": "string.quoted",
-					"match": "\\\\[\\\\\"0nrt]"
-				}}
-			]
-		}},
-		"strings-format": {{
-			"name": "constant.character.escape",
-			"begin": "\\$\"",
-			"end": "\"",
-			"patterns": [
-				{{
-					"name": "string.quoted",
-					"match": "\\\\[\\\\\"0nrt_]"
-				}},
-				{{
-					"name": "constant.numeric",
-					"match": "(?<!\\\\)_"
-				}}
-			]
-		}},
-		"strings-multiline": {{
-			"name": "constant.character.escape",
-			"begin": "\\$ ",
-			"end": "$"
-		}},
-		"strings-multiline-format": {{
-			"name": "constant.character.escape",
-			"begin": "\\$\\$ ",
-			"end": "$",
-			"patterns": [
-				{{
-					"name": "constant.numeric",
-					"match": "(?<!\\\\)_"
-				}}
-			]
-		}},
-        "characters": {{
-            "name": "constant.character.escape",
-            "match": "@(\\\\(x[0-9A-Fa-f]{{2}}|u[0-9A-Fa-f]{{4}}|.)|.)"
-        }},
-        "labels": {{
-            "name": "label.uiua",
-            "match": "\\$[a-zA-Z]*"
-        }},
-		"numbers": {{
-			"name": "constant.numeric.uiua",
-			"match": "[`¯]?(\\d+|η|π|τ|∞|eta|pi|tau|inf(i(n(i(t(y)?)?)?)?)?)([./]\\d+|e[+-]?\\d+)?"
-		}},
-		"strand": {{
-			"name": "comment.line",
-			"match": "(_|‿)"
-		}},
-        "module_delim": {{
-            "match": "---"
-        }},
-        "stack": {{
-            "match": "{stack_functions}"
-        }},
-		"noadic": {{
-			"name": "entity.name.tag.uiua",
-            "match": "{noadic_functions}"
-        }},
-		"monadic": {{
-			"name": "string.quoted",
-            "match": "{monadic_functions}"
-        }},
-		"dyadic": {{
-			"name": "entity.name.function.uiua",
-            "match": "{dyadic_functions}"
-        }},
-		"mod1": {{
-			"name": "entity.name.type.uiua",
-            "match": "{monadic_modifiers}"
-        }},
-		"mod2": {{
-			"name": "keyword.control.uiua",
-            "match": "{dyadic_modifiers}"
-        }}
-    }},
-	"scopeName": "source.uiua"
-}}"##
-        );
-
-        std::fs::write("uiua.tmLanguage.json", text).expect("Failed to write grammar file");
-    }
 }

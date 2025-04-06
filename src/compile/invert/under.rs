@@ -241,23 +241,8 @@ static UNDER_PATTERNS: &[&dyn UnderPattern] = &[
     &(Now, (Now, PushUnd(1)), (Now, PopUnd(1), Sub)),
     &MaybeVal(Store1Copy(Sys(SysOp::FOpen), Sys(SysOp::Close))),
     &MaybeVal(Store1Copy(Sys(SysOp::FCreate), Sys(SysOp::Close))),
-    &MaybeVal(Store1Copy(Sys(SysOp::TcpConnect), Sys(SysOp::Close))),
-    &MaybeVal(Store1Copy(Sys(SysOp::TlsConnect), Sys(SysOp::Close))),
-    &MaybeVal(Store1Copy(Sys(SysOp::TcpAccept), Sys(SysOp::Close))),
-    &MaybeVal(Store1Copy(Sys(SysOp::TcpListen), Sys(SysOp::Close))),
-    &MaybeVal(Store1Copy(Sys(SysOp::TlsListen), Sys(SysOp::Close))),
     &MaybeVal(Stash(1, Sys(SysOp::FReadAllStr), Sys(SysOp::FWriteAll))),
     &MaybeVal(Stash(1, Sys(SysOp::FReadAllBytes), Sys(SysOp::FWriteAll))),
-    &MaybeVal((
-        Sys(SysOp::RunStream),
-        (Sys(SysOp::RunStream), CopyUnd(3)),
-        (PopUnd(3), TryClose, TryClose, TryClose),
-    )),
-    &MaybeVal((
-        Sys(SysOp::RawMode),
-        (UnRawMode, PushUnd(1), Sys(SysOp::RawMode)),
-        (PopUnd(1), Sys(SysOp::RawMode)),
-    )),
     // Patterns that need to be last
     &StashAntiPat,
     &FlipPat,

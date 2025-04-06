@@ -15,9 +15,6 @@ use std::{
 
 use bytemuck::allocation::cast_vec;
 use ecow::{eco_vec, EcoVec};
-use rand::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
-use rayon::prelude::*;
 
 use crate::{
     algorithm::pervade::{self, bin_pervade_recursive, InfalliblePervasiveFn},
@@ -26,23 +23,9 @@ use crate::{
     cowslice::{cowslice, CowSlice},
     val_as_arr,
     value::Value,
-    Shape, Uiua, UiuaResult, RNG,
+    rand_range, randf,
+    Shape, Uiua, UiuaResult,
 };
-
-macro_rules! par_if {
-    ($cond:expr, $if_true:expr, $if_false:expr) => {{
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            if $cond {
-                $if_true
-            } else {
-                $if_false
-            }
-        }
-        #[cfg(target_arch = "wasm32")]
-        $if_false
-    }};
-}
 
 use super::{
     shape_prefixes_match, validate_size, validate_size_of, ArrayCmpSlice, FillContext, SizeError,
@@ -490,7 +473,6 @@ impl Value {
             match kept {
                 Value::Num(a) => a.keep_scalar_real(counts[0], env)?.into(),
                 Value::Byte(a) => a.convert::<f64>().keep_scalar_real(counts[0], env)?.into(),
-                Value::Complex(a) => a.keep_scalar_real(counts[0], env)?.into(),
                 Value::Char(a) => a.keep_scalar_real(counts[0], env)?.into(),
                 Value::Box(a) => a.keep_scalar_real(counts[0], env)?.into(),
             }
@@ -900,7 +882,6 @@ impl Value {
         match rotated {
             Value::Num(a) => a.rotate_depth(by_ints()?, b_depth, a_depth, env)?,
             Value::Byte(a) => a.rotate_depth(by_ints()?, b_depth, a_depth, env)?,
-            Value::Complex(a) => a.rotate_depth(by_ints()?, b_depth, a_depth, env)?,
             Value::Char(a) => a.rotate_depth(by_ints()?, b_depth, a_depth, env)?,
             Value::Box(a) if a.rank() == a_depth => {
                 for Boxed(val) in a.data.as_mut_slice() {
@@ -1141,11 +1122,7 @@ impl Array<f64> {
         let result_chunk_size = b.row_count() * prod_elems;
         if result_chunk_size > 0 {
             let iter = (a.row_slices()).zip(result_slice.chunks_exact_mut(result_chunk_size));
-            par_if!(
-                a.row_count() > 100 || b.row_count() > 100,
-                (iter.par_bridge()).for_each(|(a_row, res_row)| inner(a_row, res_row)),
-                iter.for_each(|(a_row, res_row)| inner(a_row, res_row))
-            )
+            iter.for_each(|(a_row, res_row)| inner(a_row, res_row))
         }
         Ok(Array::new(result_shape, result_data))
     }
@@ -1785,7 +1762,6 @@ impl Value {
         let mut hasher = DefaultHasher::new();
         seed.hash(&mut hasher);
         let seed = hasher.finish();
-        let mut rng = SmallRng::seed_from_u64(seed);
 
         const SHAPE_REQ: &str = "Shape must be an array of natural \
             numbers with at most rank 2";
@@ -1795,7 +1771,7 @@ impl Value {
             let elem_count = validate_size::<f64>(shape.iter().copied(), env)?;
             let mut data = eco_vec![0.0; elem_count];
             for x in data.make_mut() {
-                *x = rng.gen();
+                *x = randf() as f64;
             }
             Ok(Array::new(shape, data))
         };
@@ -1841,7 +1817,7 @@ impl Value {
             0 => Err(env.error("Cannot pick random row of an empty array").fill()),
             1 => Ok(self.row(0)),
             len => {
-                let i = RNG.with_borrow_mut(|rng| rng.gen_range(0..len));
+                let i = rand_range(0f32, (len as f32)) as usize;
                 Ok(self.row(i))
             }
         }

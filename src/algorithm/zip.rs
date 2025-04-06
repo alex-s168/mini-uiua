@@ -5,7 +5,7 @@ use std::{cell::RefCell, collections::HashMap, iter::repeat, mem::swap, rc::Rc};
 use ecow::eco_vec;
 
 use crate::{
-    algorithm::pervade::bin_pervade_values, cowslice::CowSlice, get_ops, random,
+    algorithm::pervade::bin_pervade_values, cowslice::CowSlice, get_ops, randf,
     types::push_empty_rows_value, val_as_arr, value::Value, Array, Boxed, ImplPrimitive, Node, Ops,
     PersistentMeta, Primitive, Shape, SigNode, Uiua, UiuaResult,
 };
@@ -85,7 +85,7 @@ fn impl_prim_mon_fast_fn(prim: ImplPrimitive, span: usize) -> Option<ValueMonFn>
             let elem_count: usize = shape.iter().product();
             let mut data = eco_vec![0.0; elem_count];
             for n in data.make_mut() {
-                *n = random();
+                *n = randf() as f64;
             }
             Ok(Array::new(shape, data).into())
         }),
