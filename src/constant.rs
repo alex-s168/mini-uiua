@@ -1,5 +1,4 @@
-use std::path::{Path, PathBuf};
-use once_cell::sync::Lazy;
+use std::path::Path;
 
 use crate::{
     SysBackend, Value, WILDCARD_NAN,
@@ -12,13 +11,13 @@ pub struct ConstantDef {
     /// The constant's class
     pub class: ConstClass,
     /// The constant's value
-    pub value: Lazy<ConstantValue>,
+    pub value: ConstantValue,
 }
 
 /// The value of a shadowable constant
 pub enum ConstantValue {
     /// A static value that is always the same
-    Static(Value),
+    Static(fn() -> Value),
 }
 
 impl ConstantValue {
@@ -28,25 +27,9 @@ impl ConstantValue {
         current_file_path: Option<&Path>,
         backend: &dyn SysBackend,
     ) -> Value {
-        let current_file_path = current_file_path.map(|p| {
-            let mut path = PathBuf::new();
-            for comp in p.components() {
-                path.push(comp);
-            }
-            path
-        });
         match self {
-            ConstantValue::Static(val) => val.clone(),
+            ConstantValue::Static(val) => val(),
         }
-    }
-}
-
-impl<T> From<T> for ConstantValue
-where
-    T: Into<Value>,
-{
-    fn from(val: T) -> Self {
-        ConstantValue::Static(val.into())
     }
 }
 
@@ -69,7 +52,7 @@ macro_rules! constant {
                 $(#[$attr])*
                 ConstantDef {
                     name: $name,
-                    value: Lazy::new(|| {$value.into()}),
+                    value: ConstantValue::Static(|| {$value.into()}),
                     class: ConstClass::$class,
                 },
             )*];

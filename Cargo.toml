@@ -19,13 +19,11 @@ ctor = "0.3.6"
 ecow = {version = "0.2.3"}
 enum-iterator = "2.0.0"
 indexmap = {version = "2"}
-once_cell = "1.20.3"
 paste = "1.0.14"
 pathdiff = "0.2.1"
 time = {version = "0.3.36", features = ["local-offset"]}
 tinyvec = {version = "1", features = ["alloc"]}
 unicode-segmentation = "1.10"
-wasm-bindgen = "0.2.100"
 
 [features]
 
