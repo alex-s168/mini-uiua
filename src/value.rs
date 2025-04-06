@@ -73,12 +73,6 @@ macro_rules! val_as_arr {
 }
 
 impl Value {
-    /// A NULL pointer value for use in `&ffi`
-    pub(crate) fn null() -> Self {
-        let mut arr = Array::<u8>::default();
-        arr.meta_mut().pointer = Some(MetaPtr::null());
-        Value::from(arr)
-    }
     pub(crate) fn builder(capacity: usize) -> ValueBuilder {
         ValueBuilder::with_capacity(capacity)
     }
@@ -1640,7 +1634,7 @@ value_un_impl!(
     not,
     [Num, num],
     [|meta| meta.flags.is_boolean(), Byte, bool],
-    (Byte, byte),
+    (Byte, byte)
 );
 value_un_impl!(
     scalar_abs,
@@ -1653,7 +1647,7 @@ value_un_impl!(
     sqrt,
     [Num, num],
     [|meta| meta.flags.is_boolean(), Byte, bool],
-    (Byte, byte),
+    (Byte, byte)
 );
 value_un_impl!(sin, [Num, num], (Byte, byte));
 value_un_impl!(cos, [Num, num], (Byte, byte));

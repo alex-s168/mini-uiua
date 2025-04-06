@@ -12,7 +12,7 @@ use crate::{
     boxed::Boxed,
     terminal_size, val_as_arr,
     value::Value,
-    Complex, Primitive, WILDCARD_CHAR, WILDCARD_NAN,
+    Primitive, WILDCARD_CHAR, WILDCARD_NAN,
 };
 
 type Grid<T = char> = Vec<Vec<T>>;
@@ -136,36 +136,6 @@ impl GridFmt for f64 {
     }
 }
 
-impl GridFmt for Complex {
-    fn fmt_grid(&self, params: GridFmtParams) -> Grid {
-        if self.im.abs() == 0.0 {
-            self.re.fmt_grid(params)
-        } else if self.re.abs() == 0.0 {
-            if self.im == 1.0 {
-                vec![boxed_scalar(params.boxed).chain(['i']).collect()]
-            } else if self.im == -1.0 {
-                vec![boxed_scalar(params.boxed).chain(['¯', 'i']).collect()]
-            } else {
-                let mut grid = self.im.fmt_grid(params);
-                grid[0].push('i');
-                grid
-            }
-        } else {
-            let mut re = self.re.fmt_grid(params);
-            let im = if self.im.abs() == 1.0 {
-                String::new()
-            } else {
-                self.im.abs().grid_string(params.label)
-            };
-            let sign = if self.im < 0.0 { '-' } else { '+' };
-            re[0].push(sign);
-            re[0].extend(im.chars());
-            re[0].push('i');
-            re
-        }
-    }
-}
-
 impl GridFmt for Value {
     fn fmt_grid(&self, params: GridFmtParams) -> Grid {
         if params.depth > 100 {
@@ -228,7 +198,6 @@ impl GridFmt for Value {
         match self {
             Value::Num(n) => n.fmt_grid(params),
             Value::Byte(b) => b.fmt_grid(params),
-            Value::Complex(c) => c.fmt_grid(params),
             Value::Char(c) => c.fmt_grid(params),
             Value::Box(v) => v.fmt_grid(GridFmtParams {
                 depth: params.depth + 1,
@@ -280,7 +249,6 @@ impl GridFmt for Boxed {
         let mut grid = match self.as_value() {
             Value::Num(array) => array.fmt_grid(subparams),
             Value::Byte(array) => array.fmt_grid(subparams),
-            Value::Complex(array) => array.fmt_grid(subparams),
             Value::Char(array) => array.fmt_grid(subparams),
             Value::Box(array) => array.fmt_grid(subparams),
         };
@@ -330,7 +298,6 @@ impl<T: GridFmt + ArrayValue> GridFmt for Array<T> {
                 first_align = Some(match &keys.keys {
                     Value::Num(_) => f64::alignment(),
                     Value::Byte(_) => u8::alignment(),
-                    Value::Complex(_) => Complex::alignment(),
                     Value::Char(_) => char::alignment(),
                     Value::Box(_) => Boxed::alignment(),
                 });
@@ -350,7 +317,6 @@ impl<T: GridFmt + ArrayValue> GridFmt for Array<T> {
                     let mut row = match &keys.keys {
                         Value::Num(_) => shape_row::<f64>(&keys_row_shape),
                         Value::Byte(_) => shape_row::<u8>(&keys_row_shape),
-                        Value::Complex(_) => shape_row::<Complex>(&keys_row_shape),
                         Value::Char(_) => shape_row::<char>(&keys_row_shape),
                         Value::Box(_) => shape_row::<Boxed>(&keys_row_shape),
                     };
@@ -495,19 +461,6 @@ impl<T: GridFmt + ArrayValue> GridFmt for Array<T> {
             }
         }
 
-        // Add complex marker
-        if T::TYPE_ID == Complex::TYPE_ID && !grid.iter().flatten().any(|&c| c == 'ℂ' || c == 'i')
-        {
-            if self.shape.is_empty() {
-                grid[0].push('ℂ');
-            } else if grid.len() == 1 {
-                grid[0].insert(1, 'ℂ');
-                grid[0].insert(2, ' ');
-            } else {
-                grid[0][2] = 'ℂ';
-            }
-        }
-
         // Add label
         if params.label {
             if let Some(label) = &self.meta().label {
@@ -564,7 +517,6 @@ impl<T: ArrayValue> Array<T> {
             let mut s: String = match keys.keys {
                 Value::Num(_) => shape_row::<f64>(&keys_shape),
                 Value::Byte(_) => shape_row::<u8>(&keys_shape),
-                Value::Complex(_) => shape_row::<Complex>(&keys_shape),
                 Value::Char(_) => shape_row::<char>(&keys_shape),
                 Value::Box(_) => shape_row::<Boxed>(&keys_shape),
             }

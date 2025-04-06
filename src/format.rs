@@ -1621,9 +1621,7 @@ impl SysBackend for FormatterBackend {
     }
 }
 
-#[cfg(not(feature = "native_sys"))]
 struct NoSys;
-#[cfg(not(feature = "native_sys"))]
 impl SysBackend for NoSys {
     fn any(&self) -> &dyn Any {
         self
@@ -1634,14 +1632,7 @@ impl SysBackend for NoSys {
 }
 
 fn native() -> &'static dyn SysBackend {
-    #[cfg(feature = "native_sys")]
-    {
-        &crate::NativeSys
-    }
-    #[cfg(not(feature = "native_sys"))]
-    {
-        &NoSys
-    }
+    &NoSys
 }
 
 #[test]

@@ -63,21 +63,6 @@ pub(crate) fn reduce_impl(f: SigNode, depth: usize, env: &mut Uiua) -> UiuaResul
                     fast_reduce_different(bytes, 0.0, fill, depth, add::num_num, add::num_byte)
                         .into()
                 }
-                #[cfg(feature = "opt")]
-                Primitive::Sub if _flipped => fast_reduce_different(
-                    bytes,
-                    0.0,
-                    fill,
-                    depth,
-                    flip(sub::num_num),
-                    flip(sub::byte_num),
-                )
-                .into(),
-                #[cfg(feature = "opt")]
-                Primitive::Sub => {
-                    fast_reduce_different(bytes, 0.0, fill, depth, sub::num_num, sub::num_byte)
-                        .into()
-                }
                 Primitive::Mul if bytes.meta().flags.is_boolean() => {
                     let byte_fill = env.scalar_fill::<u8>().ok();
                     if bytes.row_count() == 0 || fill.is_some() && byte_fill.is_none() {
@@ -275,12 +260,6 @@ macro_rules! reduce_math {
             }
             env.push(match prim {
                 Primitive::Add => fast_reduce(xs, 0.0.into(), fill, depth, add::$f),
-                #[cfg(feature = "opt")]
-                Primitive::Sub if _flipped => {
-                    fast_reduce(xs, 0.0.into(), fill, depth, flip(sub::$f))
-                }
-                #[cfg(feature = "opt")]
-                Primitive::Sub => fast_reduce(xs, 0.0.into(), fill, depth, sub::$f),
                 Primitive::Mul => fast_reduce(xs, 1.0.into(), fill, depth, mul::$f),
                 Primitive::Or => fast_reduce(xs, 0.0.into(), fill, depth, or::$f),
                 Primitive::Max => fast_reduce(xs, f64::NEG_INFINITY.into(), fill, depth, max::$f),

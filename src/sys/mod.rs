@@ -1,23 +1,17 @@
 use std::{
     any::Any,
     fmt,
-    mem::take,
-    net::SocketAddr,
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
-    time::Duration,
+    sync::Arc,
 };
 
 use enum_iterator::{all, Sequence};
-use once_cell::sync::Lazy;
-use time::UtcOffset;
 
 use crate::{
     algorithm::{multi_output, validate_size},
-    cowslice::cowslice,
     get_ops,
     abort_txt,
-    Array, Boxed, Ops, Primitive, Purity, Uiua, UiuaErrorKind, UiuaResult, Value,
+    Array, Boxed, Ops, Primitive, Purity, Uiua, UiuaResult, Value,
 };
 
 macro_rules! sys_op {
@@ -347,11 +341,6 @@ impl fmt::Display for HandleKind {
         }
     }
 }
-
-#[cfg(feature = "image")]
-pub(crate) type WebcamImage = image::RgbImage;
-#[cfg(not(feature = "image"))]
-pub(crate) type WebcamImage = ();
 
 /// Trait for defining a system backend
 #[allow(unused_variables)]
@@ -716,7 +705,6 @@ impl SysOp {
                 let bytes: Vec<u8> = match data {
                     Value::Num(arr) => arr.data.iter().map(|&x| x as u8).collect(),
                     Value::Byte(arr) => arr.data.into(),
-                    Value::Complex(_) => return Err(env.error("Cannot write complex array")),
                     Value::Char(arr) => arr.data.iter().collect::<String>().into(),
                     Value::Box(_) => return Err(env.error("Cannot write box array")),
                 };
@@ -762,9 +750,6 @@ impl SysOp {
                     Value::Num(arr) => arr.data.iter().map(|&x| x as u8).collect(),
                     Value::Byte(arr) => arr.data.into(),
 
-                    Value::Complex(_) => {
-                        return Err(env.error("Cannot write complex array to file"))
-                    }
                     Value::Char(arr) => arr.data.iter().collect::<String>().into(),
                     Value::Box(_) => return Err(env.error("Cannot write box array to file")),
                 };
@@ -878,74 +863,6 @@ impl SysOp {
         }
         Ok(())
     }
-}
-
-fn value_to_command(value: &Value, env: &Uiua) -> UiuaResult<(String, Vec<String>)> {
-    let mut strings = Vec::new();
-    match value {
-        Value::Char(arr) => match arr.rank() {
-            0 | 1 => strings.push(arr.data.iter().collect::<String>()),
-            2 => {
-                for row in arr.rows() {
-                    strings.push(row.data.iter().collect::<String>());
-                }
-            }
-            n => {
-                return Err(env.error(format!(
-                    "Character array as command must be rank 0, 1, \
-                    or 2, but its rank is {n}"
-                )))
-            }
-        },
-        Value::Box(arr) => match arr.rank() {
-            0 | 1 => {
-                for bx in &arr.data {
-                    match bx.as_value() {
-                        Value::Char(arr) if arr.rank() <= 1 => {
-                            strings.push(arr.data.iter().collect::<String>())
-                        }
-                        val => {
-                            return Err(env.error(format!(
-                                "Function array as command must be all boxed strings, \
-                                but at least one is a {}",
-                                val.type_name()
-                            )))
-                        }
-                    }
-                }
-            }
-            n => {
-                return Err(env.error(format!(
-                    "Function array as command must be rank 0 or 1, \
-                    but its rank is {n}"
-                )))
-            }
-        },
-        Value::Num(_) => {
-            return Err(env.error(format!(
-                "Command must be a string or box array, but it is {}",
-                value.type_name_plural()
-            )))
-        }
-        Value::Byte(_) => {
-            return Err(env.error(format!(
-                "Command must be a string or box array, but it is {}",
-                value.type_name_plural()
-            )))
-        }
-
-        Value::Complex(_) => {
-            return Err(env.error(format!(
-                "Command must be a string or box array, but it is {}",
-                value.type_name_plural()
-            )))
-        }
-    }
-    if strings.is_empty() {
-        return Err(env.error("Command array not be empty"));
-    }
-    let command = strings.remove(0);
-    Ok((command, strings))
 }
 
 /// Get the current time in seconds

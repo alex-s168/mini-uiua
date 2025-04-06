@@ -309,8 +309,6 @@ pub fn split_by(f: SigNode, by_scalar: bool, keep_empty: bool, env: &mut Uiua) -
         || haystack.rank() > 1
         || delim.rank() > 1
         || by_scalar && !(delim.rank() == 0 || delim.rank() == 1 && delim.row_count() == 1)
-        || matches!(delim, Value::Complex(_))
-        || matches!(haystack, Value::Complex(_))
     {
         let mask = if by_scalar {
             delim.is_ne(haystack.clone(), env)?
@@ -326,7 +324,6 @@ pub fn split_by(f: SigNode, by_scalar: bool, keep_empty: bool, env: &mut Uiua) -
             &delim,
             |a, b| a.split_by(b, keep_empty, |data| Boxed(data.into())),
             |a, b| a.split_by(b, keep_empty, |data| Boxed(data.into())),
-            |_, _| unreachable!("split by complex"),
             |a, b| a.split_by(b, keep_empty, |data| Boxed(data.into())),
             |a, b| a.split_by(b, keep_empty, |data| Boxed(data.into())),
             |a, b| {
@@ -343,7 +340,6 @@ pub fn split_by(f: SigNode, by_scalar: bool, keep_empty: bool, env: &mut Uiua) -
             &delim,
             |a, b| a.split_by(b, keep_empty, Value::from),
             |a, b| a.split_by(b, keep_empty, Value::from),
-            |_, _| unreachable!("split by complex"),
             |a, b| a.split_by(b, keep_empty, Value::from),
             |a, b| a.split_by(b, keep_empty, Value::from),
             |a, b| {
@@ -799,7 +795,6 @@ pub fn undo_partition_part2(env: &mut Uiua) -> UiuaResult {
                 let start = index * row_elem_count;
                 original.generic_bin_mut(
                     row,
-                    |a, b| Ok(update_array_at(a, start, b.data.as_slice())),
                     |a, b| Ok(update_array_at(a, start, b.data.as_slice())),
                     |a, b| Ok(update_array_at(a, start, b.data.as_slice())),
                     |a, b| Ok(update_array_at(a, start, b.data.as_slice())),

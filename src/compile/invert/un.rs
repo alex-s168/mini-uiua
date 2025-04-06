@@ -189,7 +189,6 @@ fn anti_inverse_impl(mut input: &[Node], asm: &Assembly, for_un: bool) -> Invers
 }
 
 pub static UN_PATTERNS: &[&dyn InvertPattern] = &[
-    &AlgebraPat,
     &InnerAnti,
     &InnerContraDip,
     &JoinPat,
@@ -910,19 +909,6 @@ inverse!(DupPat, input, asm, Prim(Dup, dup_span), {
 
 inverse!(DumpPat, input, _, ref, Mod(Dump, args, span), {
     Ok((input, ImplMod(UnDump, args.clone(), *span)))
-});
-
-inverse!(AlgebraPat, input, asm, {
-    let mut error = Generic;
-    for end in (1..=input.len()).rev() {
-        let chunk = &input[..end];
-        match algebraic_inverse(chunk, asm) {
-            Ok(inv) => return Ok((&input[end..], inv)),
-            Err(Some(e)) => error = error.max(InversionError::AlgebraError(e)),
-            Err(None) => {}
-        }
-    }
-    Err(error)
 });
 
 inverse!(AntiContraFlip, input, asm, Prim(Flip, span), {

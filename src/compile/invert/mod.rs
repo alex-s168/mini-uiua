@@ -178,7 +178,6 @@ pub enum InversionError {
     AsymmetricUnderSig(Signature),
     ComplexInvertedUnder,
     UnderExperimental,
-    AlgebraError(AlgebraError),
     UnUnderExperimental,
     UnUnderSignature(Signature),
     ReduceFormat,
@@ -220,7 +219,6 @@ impl fmt::Display for InversionError {
                     Primitive::Under.format()
                 )
             }
-            InversionError::AlgebraError(e) => e.fmt(f),
             InversionError::UnUnderExperimental => {
                 write!(
                     f,

@@ -4,12 +4,9 @@
 
 mod defs;
 pub use defs::*;
-use ecow::EcoVec;
 
 use core::str;
 use std::{
-    borrow::{BorrowMut, Cow},
-    cell::RefCell,
     collections::HashMap,
     f64::consts::{PI, TAU},
     fmt
@@ -19,8 +16,6 @@ use enum_iterator::{all, Sequence};
 
 use crate::{
     algorithm::{self, loops, reduce, table, zip, *},
-    array::Array,
-    boxed::Boxed,
     grid_fmt::GridFmt,
     lex::{AsciiToken, SUBSCRIPT_DIGITS},
     sys::*,
@@ -515,13 +510,11 @@ impl Primitive {
     #[allow(unused_parens)]
     pub fn is_experimental(&self) -> bool {
         use Primitive::*;
-        use SysOp::*;
         matches!(
             self,
             (Reach | Slf | Above | Around)
                 | (Or | Base)
                 | Astar
-                | (Derivative | Integral)
                 | (Stringify | Quote | Sig)
         )
     }

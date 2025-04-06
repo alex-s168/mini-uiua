@@ -2840,56 +2840,6 @@ primitive!(
     /// ex: ⊢path(+⊙¤ ⊂¯.⊞=. °⊏)≍ "thud" "uiua"
     /// [path] is designed to be maximally flexible, so it can be used with graphs or grids or any other structure.
     ((2)[2], Path, Misc, "path"),
-    /// Calculate the derivative of a mathematical expression
-    ///
-    /// Basic polynomials are supported, along with [sine] and [logarithm].
-    /// ex: # Experimental!
-    ///   : # x² → 2x
-    ///   : ∂(×.) 5
-    /// ex: # Experimental!
-    ///   : # √x → 1/(2√x)
-    ///   : ∂√ 1/9
-    /// ex: # Experimental!
-    ///   : # x² - 2x - 4  →  2x² - 2x
-    ///   : ∂(++⊃(ⁿ2|×¯2|¯4)) [0 1 2]
-    /// [derivative][sine] is a simple way to make a cosine function.
-    /// ex: # Experimental!
-    ///   : # sin(x) → cos(x)
-    ///   : ⍜×⁅1e3 ∂∿ ×τ÷⟜⇡8
-    /// Most derivatives that would require the chain or product rule are not supported.
-    /// ex! # Experimental!
-    ///   : # xsin(x)  →  sin(x) + xcos(x)
-    ///   : ∂(×∿.) ×τ÷⟜⇡8
-    /// They do work if the inner derivative is a constant.
-    /// ex: # Experimental!
-    ///   : # sin(2x) → 2cos(2x)
-    ///   : ∂(∿×2) ×τ÷⟜⇡8
-    ///
-    /// See also: [integral]
-    ([1], Derivative, Misc, ("derivative", '∂')),
-    /// Calculate an antiderivative of a mathematical expression
-    ///
-    /// Basic polynomials are supported, along with [sine] and [logarithm].
-    /// ex: # Experimental!
-    ///   : # x² → x³/3
-    ///   : ∫(×.) 3
-    /// ex: # Experimental!
-    ///   : # √x → (2x^1.5)/3
-    ///   : ∫√ 1
-    /// ex: # Experimental!
-    ///   : # 2x + 5  →  x² + 5x
-    ///   : ∫(+5×2) 2
-    /// You can compute the integral over a range with [subtract][both].
-    /// ex: # Experimental!
-    ///   : # 1/x → ln(x)
-    ///   : -∩∫(÷:1) 1 e
-    /// Most integrals that would require u-substitution or integration by parts are not supported.
-    /// ex! # Experimental!
-    ///   : # xsin(x)  →  sin(x) - xcos(x)
-    ///   : ∫(×∿.) ×τ÷⟜⇡8
-    ///
-    /// See also: [derivative]
-    ([1], Integral, Misc, ("integral", '∫')),
     /// Convert a value to its code representation
     ///
     /// ex: repr π

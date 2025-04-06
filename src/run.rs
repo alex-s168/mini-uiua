@@ -1,7 +1,6 @@
 //! The Uiua interpreter/runtime
 
 use std::{
-    cell::RefCell,
     cmp::Ordering,
     collections::HashMap,
     hash::Hash,
@@ -233,123 +232,6 @@ impl Default for Runtime {
             reports: Vec::new(),
         }
     }
-}
-
-fn arr_from_raw<T: crate::array::ArrayValue>(data: *const T, len: u32) -> Array<T> {
-    let slice: &[T] = unsafe { std::slice::from_raw_parts(data, len as usize) };
-    slice.into()
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_from_u8(data: *const u8, len: u32) -> *mut Value {
-    let value = Value::Byte(arr_from_raw(data, len));
-    let boxx = Box::<Value>::new(value);
-    Box::into_raw(boxx)
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_from_f64(data: *const f64, len: u32) -> *mut Value {
-    let value = Value::Num(arr_from_raw(data, len));
-    let boxx = Box::<Value>::new(value);
-    Box::into_raw(boxx)
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_box(data: *mut *mut Value, len: u32) -> *mut Value {
-    let args = unsafe { Vec::from_raw_parts(data, len as usize, len as usize) };
-    let mut out = Vec::new();
-    for xp in args {
-        let x = *unsafe { std::boxed::Box::from_raw(xp) };
-        out.push(Boxed(x));
-    }
-
-    let value = Value::Box(out.as_slice().into());
-    let boxx = Box::<Value>::new(value);
-    Box::into_raw(boxx)
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_out_val_free(val: *mut Value) {
-    unsafe { drop(std::boxed::Box::from_raw(val)); }
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_rank(valp: *const Value) -> u32 {
-    let val = unsafe { valp.as_ref().unwrap() };
-    val.rank() as u32
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_shape(valp: *const Value, shape_out: *mut u32) {
-    let val = unsafe { valp.as_ref().unwrap() };
-    for (i,x) in val.shape().iter().enumerate() {
-        unsafe { *shape_out.wrapping_add(i) = *x as u32; }
-    }
-}
-
-fn arr_to_raw<T: crate::array::ArrayValue>(arr: &Array<T>, dest: *mut T) {
-    for (i,v) in arr.data.iter().enumerate() {
-        unsafe { *dest.wrapping_add(i) = v.clone(); }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_to_u8(valp: *const Value, out: *mut u8) {
-    let val = unsafe { valp.as_ref().unwrap() };
-    arr_to_raw(val.as_byte_array().unwrap(), out);
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_to_f64(valp: *const Value, out: *mut f64) {
-    let val = unsafe { valp.as_ref().unwrap() };
-    arr_to_raw(val.as_num_array().unwrap(), out);
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_val_to_box_clone(valp: *const Value, out: *mut *mut Value) {
-    let val = unsafe { valp.as_ref().unwrap() };
-    for (i,v) in val.as_box_array().unwrap().data.iter().enumerate() {
-        let boxx = Box::<Value>::new(v.as_value().clone());
-        unsafe { *out.wrapping_add(i) = Box::into_raw(boxx); }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_alloc(num: u32) -> *mut u8 {
-    let mut foo = Vec::<u8>::with_capacity(num as usize);
-
-    let ptr = foo.as_mut_ptr();
-    std::mem::forget(foo);
-    ptr
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_free(ptr: *mut u8, num: u32) {
-    let _foo = unsafe { Vec::from_raw_parts(ptr, 0, num as usize) };
-}
-
-#[no_mangle]
-pub extern "C" fn uiua_ptr_size() -> u32 {
-    std::mem::size_of::<usize>() as u32
-}
-
-// args will be freed! returns boxed array of values
-#[no_mangle]
-pub extern "C" fn uiua_run(src_in: *const u8, src_length: u32, args_len: u32, args_in: *mut *mut Value) -> *mut Value {
-    let src = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(src_in, src_length as usize)) }; 
-    let args = unsafe { Vec::from_raw_parts(args_in, args_len as usize, args_len as usize) };
-
-    let mut uiua = Uiua::with_safe_sys();
-    for xp in args {
-        let x = unsafe { std::boxed::Box::from_raw(xp) };
-        uiua.push(*x);
-    }
-    uiua.run_str(src).unwrap();
-
-    let out = uiua.rt.stack.into_iter().map(|x| Boxed(x)).collect::<Vec<_>>();
-    let value = Value::Box(out.as_slice().into());
-    let boxx = Box::<Value>::new(value);
-    Box::into_raw(boxx)
 }
 
 impl Uiua {

@@ -150,7 +150,6 @@ pub mod ast;
 mod boxed;
 mod check;
 mod compile;
-mod complex;
 mod constant;
 mod cowslice;
 mod error;
@@ -170,9 +169,6 @@ mod sys;
 mod tree;
 mod types;
 mod value;
-#[cfg(feature = "window")]
-#[doc(hidden)]
-pub mod window;
 
 #[allow(unused_imports)]
 pub use self::{

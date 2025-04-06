@@ -568,7 +568,6 @@ impl Value {
                 |a, b| a.undo_first(b, env).map(Into::into),
                 |a, b| a.undo_first(b, env).map(Into::into),
                 |a, b| a.undo_first(b, env).map(Into::into),
-                |a, b| a.undo_first(b, env).map(Into::into),
                 |a, b| {
                     env.error(format!(
                         "Cannot unfirst {} into {}",
@@ -583,7 +582,6 @@ impl Value {
         into.try_map_boxed(|into| {
             self.generic_bin_into(
                 into.unboxed(),
-                |a, b| a.undo_last(b, env).map(Into::into),
                 |a, b| a.undo_last(b, env).map(Into::into),
                 |a, b| a.undo_last(b, env).map(Into::into),
                 |a, b| a.undo_last(b, env).map(Into::into),
@@ -764,7 +762,6 @@ impl Value {
             |a| a.reverse_depth(depth),
             |a| a.reverse_depth(depth),
             |a| a.reverse_depth(depth),
-            |a| a.reverse_depth(depth),
         )
     }
 }
@@ -814,7 +811,6 @@ impl Value {
     /// Transpose the value
     pub fn transpose(&mut self) {
         self.generic_mut_deep(
-            Array::transpose,
             Array::transpose,
             Array::transpose,
             Array::transpose,

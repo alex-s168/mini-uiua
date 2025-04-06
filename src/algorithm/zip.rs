@@ -302,7 +302,6 @@ fn prim_dy_fast_fn(
         Gt => spanned_dy_fn(span, Value::other_is_gt),
         Le => spanned_dy_fn(span, Value::other_is_le),
         Ge => spanned_dy_fn(span, Value::other_is_ge),
-        Complex => spanned_dy_fn(span, Value::complex),
         Max => spanned_dy_fn(span, Value::max),
         Min => spanned_dy_fn(span, Value::min),
         Atan => spanned_dy_fn(span, Value::atan2),

@@ -159,7 +159,6 @@ impl Value {
             |a, b| a.undo_pick(idx_shape, &index_data, b, env).map(Into::into),
             |a, b| a.undo_pick(idx_shape, &index_data, b, env).map(Into::into),
             |a, b| a.undo_pick(idx_shape, &index_data, b, env).map(Into::into),
-            |a, b| a.undo_pick(idx_shape, &index_data, b, env).map(Into::into),
             |a, b| {
                 env.error(format!(
                     "Cannot unpick {} array from {} array",
@@ -382,7 +381,6 @@ impl Value {
             |a, b| a.undo_take(&index, b, env).map(Into::into),
             |a, b| a.undo_take(&index, b, env).map(Into::into),
             |a, b| a.undo_take(&index, b, env).map(Into::into),
-            |a, b| a.undo_take(&index, b, env).map(Into::into),
             |a, b| {
                 env.error(format!(
                     "Cannot undo take {} into {}",
@@ -409,7 +407,6 @@ impl Value {
         };
         self.generic_bin_into(
             into,
-            |a, b| a.undo_drop(&index, b, env).map(Into::into),
             |a, b| a.undo_drop(&index, b, env).map(Into::into),
             |a, b| a.undo_drop(&index, b, env).map(Into::into),
             |a, b| a.undo_drop(&index, b, env).map(Into::into),
@@ -1065,7 +1062,6 @@ impl Value {
         }
         from.generic_bin_into(
             into,
-            |a, b| a.undo_select(&idx_shape, &ind, b, env).map(Into::into),
             |a, b| a.undo_select(&idx_shape, &ind, b, env).map(Into::into),
             |a, b| a.undo_select(&idx_shape, &ind, b, env).map(Into::into),
             |a, b| a.undo_select(&idx_shape, &ind, b, env).map(Into::into),

@@ -201,7 +201,6 @@ impl Value {
                 |arr, value| Ok(arr.set_row(index, value)),
                 |arr, value| Ok(arr.set_row(index, value)),
                 |arr, value| Ok(arr.set_row(index, value)),
-                |arr, value| Ok(arr.set_row(index, value)),
                 |a, b| {
                     env.error(format!(
                         "Cannot insert {} value into map with {} values",
@@ -245,7 +244,6 @@ impl Value {
                 |arr, value| Ok(arr.set_row(index, value)),
                 |arr, value| Ok(arr.set_row(index, value)),
                 |arr, value| Ok(arr.set_row(index, value)),
-                |arr, value| Ok(arr.set_row(index, value)),
                 |a, b| {
                     env.error(format!(
                         "Cannot insert {} value into map with {} values",
@@ -257,7 +255,6 @@ impl Value {
         } else {
             self.generic_bin_mut(
                 value,
-                |arr, value| Ok(arr.insert_row(index, value)),
                 |arr, value| Ok(arr.insert_row(index, value)),
                 |arr, value| Ok(arr.insert_row(index, value)),
                 |arr, value| Ok(arr.insert_row(index, value)),

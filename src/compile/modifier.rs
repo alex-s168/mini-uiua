@@ -2,7 +2,6 @@
 #![allow(clippy::redundant_closure_call)]
 
 use super::*;
-use algebra::{derivative, integral};
 use invert::InversionError;
 use pre_eval::PreEvalMode;
 
@@ -1237,34 +1236,6 @@ impl Compiler {
             Sig => {
                 let (sn, _) = self.monadic_modifier_op(modified)?;
                 Node::from_iter([Node::new_push(sn.sig.outputs), Node::new_push(sn.sig.args)])
-            }
-            Derivative => {
-                let (sn, _) = self.monadic_modifier_op(modified)?;
-                self.add_span(modified.modifier.span.clone());
-                match derivative(&sn.node, &self.asm) {
-                    Ok(node) => node,
-                    Err(e) => {
-                        self.add_error(
-                            modified.modifier.span.clone(),
-                            format!("Cannot differentiate. {e}"),
-                        );
-                        sn.node
-                    }
-                }
-            }
-            Integral => {
-                let (sn, _) = self.monadic_modifier_op(modified)?;
-                self.add_span(modified.modifier.span.clone());
-                match integral(&sn.node, &self.asm) {
-                    Ok(node) => node,
-                    Err(e) => {
-                        self.add_error(
-                            modified.modifier.span.clone(),
-                            format!("Cannot integrate. {e}"),
-                        );
-                        sn.node
-                    }
-                }
             }
             _ => return Ok(None),
         }))

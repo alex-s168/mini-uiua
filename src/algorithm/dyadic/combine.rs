@@ -889,7 +889,6 @@ impl Value {
             }
             Value::Byte(_) => {
                 let mut has_num = false;
-                let mut has_complex = false;
                 let mut box_rank = None;
                 for b in &values[1..] {
                     match b {

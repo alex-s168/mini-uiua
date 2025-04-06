@@ -27,7 +27,6 @@ impl Value {
             |a, b| a.memberof(b, env).map(Into::into),
             |a, b| a.memberof(b, env).map(Into::into),
             |a, b| a.memberof(b, env).map(Into::into),
-            |a, b| a.memberof(b, env).map(Into::into),
             |a, b| {
                 env.error(format!(
                     "Cannot look for members of {} array in {} array",
@@ -109,7 +108,6 @@ impl Value {
             |a, b| a.index_of(b, env).map(Into::into),
             |a, b| a.index_of(b, env).map(Into::into),
             |a, b| a.index_of(b, env).map(Into::into),
-            |a, b| a.index_of(b, env).map(Into::into),
             |a, b| {
                 env.error(format!(
                     "Cannot look for indices of {} array in {} array",
@@ -123,7 +121,6 @@ impl Value {
     pub fn progressive_index_of(&self, haystack: &Value, env: &Uiua) -> UiuaResult<Value> {
         self.generic_bin_ref(
             haystack,
-            |a, b| a.progressive_index_of(b, env).map(Into::into),
             |a, b| a.progressive_index_of(b, env).map(Into::into),
             |a, b| a.progressive_index_of(b, env).map(Into::into),
             |a, b| a.progressive_index_of(b, env).map(Into::into),
@@ -314,7 +311,6 @@ impl Value {
             |a, b| a.find(b, env).map(Into::into),
             |a, b| a.find(b, env).map(Into::into),
             |a, b| a.find(b, env).map(Into::into),
-            |a, b| a.find(b, env).map(Into::into),
             |a, b| {
                 env.error(format!(
                     "Cannot find {} in {} array",
@@ -328,7 +324,6 @@ impl Value {
     pub fn mask(&self, searched: &Self, env: &Uiua) -> UiuaResult<Self> {
         self.generic_bin_ref(
             searched,
-            |a, b| a.mask(b, env).map(Into::into),
             |a, b| a.mask(b, env).map(Into::into),
             |a, b| a.mask(b, env).map(Into::into),
             |a, b| a.mask(b, env).map(Into::into),

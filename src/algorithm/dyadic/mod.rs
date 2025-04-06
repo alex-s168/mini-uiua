@@ -8,7 +8,7 @@ use core::f64;
 use std::{
     borrow::Cow,
     cmp::Ordering,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{DefaultHasher, Hash},
     iter::{once, repeat},
     mem::{replace, swap, take},
 };
@@ -501,7 +501,6 @@ impl Value {
         } else {
             kept.generic_bin_into(
                 into,
-                |a, b| a.undo_keep(&counts, b, env).map(Into::into),
                 |a, b| a.undo_keep(&counts, b, env).map(Into::into),
                 |a, b| a.undo_keep(&counts, b, env).map(Into::into),
                 |a, b| a.undo_keep(&counts, b, env).map(Into::into),
@@ -1191,7 +1190,6 @@ impl Value {
             |a, b| a.undo_anti_orient(undices.clone(), b, env).map(Into::into),
             |a, b| a.undo_anti_orient(undices.clone(), b, env).map(Into::into),
             |a, b| a.undo_anti_orient(undices.clone(), b, env).map(Into::into),
-            |a, b| a.undo_anti_orient(undices.clone(), b, env).map(Into::into),
             |a, b| {
                 env.error(format!(
                     "Cannot undo orient of {} array into {} array",
@@ -1761,7 +1759,6 @@ impl Value {
     pub fn gen(&self, seed: &Self, env: &Uiua) -> UiuaResult<Value> {
         let mut hasher = DefaultHasher::new();
         seed.hash(&mut hasher);
-        let seed = hasher.finish();
 
         const SHAPE_REQ: &str = "Shape must be an array of natural \
             numbers with at most rank 2";
@@ -1817,7 +1814,7 @@ impl Value {
             0 => Err(env.error("Cannot pick random row of an empty array").fill()),
             1 => Ok(self.row(0)),
             len => {
-                let i = rand_range(0f32, (len as f32)) as usize;
+                let i = rand_range(0f32, len as f32) as usize;
                 Ok(self.row(i))
             }
         }
