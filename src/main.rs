@@ -18,9 +18,11 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use colored::*;
+#[cfg(feature="notify")]
 use notify::{event::ModifyKind, EventKind, RecursiveMode, Watcher};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
+#[cfg(feature="rustyline")]
 use rustyline::{error::ReadlineError, DefaultEditor};
 use terminal_size::terminal_size;
 use uiua::{
@@ -332,19 +334,26 @@ fn main() {
             args,
             stdin_file,
         }) => {
-            set_use_window(window);
-            if let Err(e) = (WatchArgs {
-                initial_path: working_file_path().ok(),
-                format: !no_format,
-                color: !no_color,
-                format_config_source: formatter_options.format_config_source,
-                clear,
-                args,
-                stdin_file,
-            })
-            .watch()
-            {
-                eprintln!("Error watching file: {e}");
+            
+            #[cfg(feature="notify")] {
+                set_use_window(window);
+                if let Err(e) = (WatchArgs {
+                    initial_path: working_file_path().ok(),
+                    format: !no_format,
+                    color: !no_color,
+                    format_config_source: formatter_options.format_config_source,
+                    clear,
+                    args,
+                    stdin_file,
+                })
+                .watch()
+                {
+                    eprintln!("Error watching file: {e}");
+                }
+            }
+
+            #[cfg(not(feature="notify"))] {
+                eprintln!("Uiua was built without notify feature");
             }
         }
         #[cfg(feature = "lsp")]
@@ -454,31 +463,33 @@ fn main() {
         Some(Comm::Check { path }) => check(path).unwrap_or_else(fail),
         Some(Comm::Find { path, text, raw }) => find(path, text, raw).unwrap_or_else(fail),
         None => {
-            set_use_window(app.window);
-            let res = match working_file_path() {
-                Ok(path) => WatchArgs {
-                    initial_path: Some(path),
-                    ..Default::default()
+            #[cfg(feature="notify")] {
+                set_use_window(app.window);
+                let res = match working_file_path() {
+                    Ok(path) => WatchArgs {
+                        initial_path: Some(path),
+                        ..Default::default()
+                    }
+                    .watch(),
+                    Err(NoWorkingFile::MultipleFiles) => WatchArgs::default().watch(),
+                    Err(_)
+                        if app.window
+                            || uiua_files(None, Some(2)).is_ok_and(|files| !files.is_empty()) =>
+                    {
+                        WatchArgs::default().watch()
+                    }
+                    Err(nwf) => {
+                        _ = App::try_parse_from(["uiua", "help"])
+                            .map(drop)
+                            .unwrap_err()
+                            .print();
+                        eprintln!("\n{nwf}");
+                        return;
+                    }
+                };
+                if let Err(e) = res {
+                    eprintln!("Error watching file: {e}");
                 }
-                .watch(),
-                Err(NoWorkingFile::MultipleFiles) => WatchArgs::default().watch(),
-                Err(_)
-                    if app.window
-                        || uiua_files(None, Some(2)).is_ok_and(|files| !files.is_empty()) =>
-                {
-                    WatchArgs::default().watch()
-                }
-                Err(nwf) => {
-                    _ = App::try_parse_from(["uiua", "help"])
-                        .map(drop)
-                        .unwrap_err()
-                        .print();
-                    eprintln!("\n{nwf}");
-                    return;
-                }
-            };
-            if let Err(e) = res {
-                eprintln!("Error watching file: {e}");
             }
         }
     }
@@ -586,6 +597,7 @@ fn working_file_path() -> Result<PathBuf, NoWorkingFile> {
     }
 }
 
+#[cfg(feature="notify")]
 struct WatchArgs {
     initial_path: Option<PathBuf>,
     format: bool,
@@ -596,6 +608,7 @@ struct WatchArgs {
     stdin_file: Option<PathBuf>,
 }
 
+#[cfg(feature="notify")]
 impl Default for WatchArgs {
     fn default() -> Self {
         Self {
@@ -610,6 +623,7 @@ impl Default for WatchArgs {
     }
 }
 
+#[cfg(feature="notify")]
 impl WatchArgs {
     fn watch(self) -> Result<(), Box<dyn Error>> {
         let WatchArgs {
@@ -1136,6 +1150,12 @@ fn format_multi_files(config: &FormatConfig) -> Result<(), UiuaError> {
     Ok(())
 }
 
+#[cfg(not(feature="rustyline"))]
+fn repl(mut env: Uiua, mut compiler: Compiler, color: bool, stack: bool, config: FormatConfig) {
+    eprintln!("Uiua was built without rustyline feature");
+}
+
+#[cfg(feature="rustyline")]
 fn repl(mut env: Uiua, mut compiler: Compiler, color: bool, stack: bool, config: FormatConfig) {
     env = env.with_interrupt_hook(|| PRESSED_CTRL_C.swap(false, Ordering::Relaxed));
     compiler.pre_eval_mode(PreEvalMode::Line);
