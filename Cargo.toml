@@ -30,9 +30,6 @@ unicode-segmentation = "1.10"
 [lib]
 crate-type = ["cdylib"]
 
-[workspace]
-#members = ["site", "tests_ffi", "pad/editor"]
-
 [profile.release]
 lto = true
 opt-level = "z"
